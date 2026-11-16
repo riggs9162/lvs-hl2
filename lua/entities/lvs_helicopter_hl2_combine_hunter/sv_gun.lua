@@ -78,6 +78,12 @@ function ENT:IsGunResting()
     return self.gunState == GUN_STATE_IDLE and self.gunNextAttack > CurTime()
 end
 
+--- Returns whether the gun is firing its bursts.
+---@return boolean bFiring
+function ENT:IsGunFiring()
+    return self.gunState == GUN_STATE_FIRING
+end
+
 --- Returns whether the gun is idle with its cooldown over, so that it can start charging.
 ---@return boolean bReady
 function ENT:IsGunReady()

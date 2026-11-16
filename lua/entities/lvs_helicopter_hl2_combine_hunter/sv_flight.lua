@@ -124,7 +124,7 @@ function ENT:FlightDemandToDelta(forward, strafe, frameYaw, reach)
     return demand
 end
 
---- Returns the goal of the autopilot, which flies to its waypoint while facing its enemy, or facing its waypoint on a bombing pass.
+--- Returns the goal of the autopilot, which flies to its waypoint while facing its enemy, or facing its waypoint on a bombing pass, and is pushed away from the obstacles around it.
 ---@param reach number Distance the goal may lie away from the helicopter.
 ---@return Vector delta World space offset to the goal position.
 ---@return number faceYaw Yaw in degrees the helicopter should face.
@@ -137,9 +137,13 @@ function ENT:GetFlightGoalAI(reach)
     local delta = targetPos - pos
     local distance = delta:Length()
 
+    reach = math.min(reach, self.aiSpeedLimit or reach)
+
     if ( distance > reach ) then
         delta:Mul(reach / distance)
     end
+
+    delta:Add(self:GetAIAvoidance())
 
     local enemy = self:AIGetTarget()
     local bFarFromGoal = delta:Length2DSqr() > FACE_GOAL_MIN_DISTANCE * FACE_GOAL_MIN_DISTANCE
