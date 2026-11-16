@@ -60,6 +60,18 @@ local SPIN_ACCEL_MIN = 50
 --- Strongest yaw acceleration of the uncontrolled spin after losing the tail rotor.
 local SPIN_ACCEL_MAX = 120
 
+--- Amount per second by which the roll offset left by a blast wears off, the original 2 per think.
+local ROLL_DAMAGE_DECAY = 2 / HELICOPTER_TICK
+
+--- Share of the rotor's sideways pull that a dying helicopter keeps.
+local DYING_SIDEWAYS_PULL = 0.1
+
+--- Largest pitch and roll in degrees a dying helicopter drifts towards.
+local DYING_LEVEL_ANGLE = 5
+
+--- Share of the remaining pitch and roll error a dying helicopter turns through per second.
+local DYING_LEVEL_RATE = 0.1
+
 --- Horizontal distance below which the autopilot keeps its facing instead of turning to its goal.
 local FACE_GOAL_MIN_DISTANCE = 50
 
@@ -112,7 +124,7 @@ function ENT:FlightDemandToDelta(forward, strafe, frameYaw, reach)
     return demand
 end
 
---- Returns the goal of the autopilot, which flies to its waypoint while facing its enemy.
+--- Returns the goal of the autopilot, which flies to its waypoint while facing its enemy, or facing its waypoint on a bombing pass.
 ---@param reach number Distance the goal may lie away from the helicopter.
 ---@return Vector delta World space offset to the goal position.
 ---@return number faceYaw Yaw in degrees the helicopter should face.
@@ -130,10 +142,13 @@ function ENT:GetFlightGoalAI(reach)
     end
 
     local enemy = self:AIGetTarget()
+    local bFarFromGoal = delta:Length2DSqr() > FACE_GOAL_MIN_DISTANCE * FACE_GOAL_MIN_DISTANCE
 
-    if ( IsValid(enemy) ) then
+    if ( self.bAIFaceTravel and bFarFromGoal ) then
+        faceYaw = delta:Angle().y
+    elseif ( IsValid(enemy) ) then
         faceYaw = (enemy:GetPos() - pos):Angle().y
-    elseif ( delta:Length2DSqr() > FACE_GOAL_MIN_DISTANCE * FACE_GOAL_MIN_DISTANCE ) then
+    elseif ( bFarFromGoal ) then
         faceYaw = delta:Angle().y
     end
 
@@ -255,7 +270,7 @@ function ENT:GetFlightLinearAccel(velocity)
     return accel
 end
 
---- Returns the local angular acceleration that leans the helicopter into its goal acceleration and turns it to its facing.
+--- Returns the local angular acceleration that leans the helicopter into its goal acceleration and turns it to its facing. A recent blast adds its roll offset to the roll goal before the conversion to degrees, exactly as the original does, which pins the helicopter at its steepest roll until the offset has worn off.
 ---@param phys PhysObj Physics object of the helicopter.
 ---@param goalAccel Vector Acceleration the helicopter leans into.
 ---@param faceYaw number Yaw in degrees the helicopter should face.
@@ -265,7 +280,7 @@ function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime)
     local angles = self:GetAngles()
     local goalUp = goalAccel:GetNormalized()
     local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * GOAL_PITCH_SCALE
-    local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)))
+    local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)) + (self.flightRollDamage or 0))
 
     goalPitch = math.Clamp(goalPitch, GOAL_PITCH_MIN, GOAL_PITCH_MAX)
     goalRoll = math.Clamp(goalRoll, -GOAL_ROLL_MAX, GOAL_ROLL_MAX)
@@ -316,6 +331,40 @@ function ENT:GetFlightVelocity(phys, deltatime)
     return velocity - physenv.GetGravity() * deltatime
 end
 
+--- Lets a shot down helicopter fall the way the original does while it is dying: the rotor no longer lifts it, only a tenth of its sideways pull remains, it spins around its yaw axis and its pitch and roll drift towards level.
+---@param phys PhysObj Physics object of the helicopter.
+---@param velocity Vector Current world space velocity.
+---@param deltatime number Length of the physics step in seconds.
+---@return Vector angularAccel Local angular acceleration.
+---@return Vector linearAccel Local linear acceleration.
+---@return number simulate Simulation mode for the motion controller.
+function ENT:SimulateDyingFlight(phys, velocity, deltatime)
+    self:UpdateFlightLift(Vector(0, 0, 0), velocity, deltatime)
+
+    local linearAccel = self:GetFlightLinearAccel(velocity)
+    local lift = self:GetUp() * self.flightLift
+
+    linearAccel.x = linearAccel.x - lift.x * (1 - DYING_SIDEWAYS_PULL)
+    linearAccel.y = linearAccel.y - lift.y * (1 - DYING_SIDEWAYS_PULL)
+    linearAccel.z = linearAccel.z - lift.z
+
+    local angles = self:GetAngles()
+    local angVelocity = phys:GetAngleVelocity()
+    local spin = math.Rand(SPIN_ACCEL_MIN, SPIN_ACCEL_MAX) * self:Sign(self._SteerOverrideMove or 1)
+
+    if ( math.abs(angVelocity.z) >= YAW_RATE_MAX ) then
+        spin = 0
+    end
+
+    local angularAccel = Vector(
+        ((math.Rand(-DYING_LEVEL_ANGLE, DYING_LEVEL_ANGLE) - angles.r) * DYING_LEVEL_RATE - angVelocity.x) / HELICOPTER_TICK,
+        ((math.Rand(-DYING_LEVEL_ANGLE, DYING_LEVEL_ANGLE) - angles.p) * DYING_LEVEL_RATE - angVelocity.y) / HELICOPTER_TICK,
+        spin
+    )
+
+    return self:PhysicsSimulateOverride(angularAccel, phys:WorldToLocalVector(linearAccel), phys, deltatime, SIM_LOCAL_ACCELERATION)
+end
+
 --- Flies the helicopter with the Half-Life 2 attack helicopter model instead of the LVS helicopter physics.
 ---@param phys PhysObj Physics object of the helicopter.
 ---@param deltatime number Length of the physics step in seconds.
@@ -328,6 +377,10 @@ function ENT:PhysicsSimulate(phys, deltatime)
     end
 
     local velocity = self:GetFlightVelocity(phys, deltatime)
+    if ( self:IsDestroyed() ) then return self:SimulateDyingFlight(phys, velocity, deltatime) end
+
+    self.flightRollDamage = math.Approach(self.flightRollDamage or 0, 0, ROLL_DAMAGE_DECAY * deltatime)
+
     local reach = math.min(velocity:Length() + CHOPPER_ACCEL_RATE, self.MaxVelocity)
     local delta, faceYaw = self:GetFlightGoal(reach, deltatime)
     local throttle = self:GetThrottle()
