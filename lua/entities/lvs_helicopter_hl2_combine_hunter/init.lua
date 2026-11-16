@@ -3,6 +3,7 @@ AddCSLuaFile("shared.lua")
 include("shared.lua")
 
 include("entities/lvs_base_fighterplane/sv_wheels.lua")
+include("sv_flight.lua")
 
 function ENT:OnSpawn(PObj)
 	local DriverSeat = self:AddDriverSeat(Vector(120, 0, -40), Angle(0, -90, 0))
