@@ -4,6 +4,7 @@ ENT.Category = "[LVS] - Half Life 2"
 ENT.IconOverride = "materials/entities/lvs/hl2/rebel_helicopter.png"
 
 ENT.Spawnable = true
+ENT.AITEAM = 2
 ENT.VehicleCategory = "Half Life 2"
 ENT.VehicleSubCategory = "Resistance"
 
