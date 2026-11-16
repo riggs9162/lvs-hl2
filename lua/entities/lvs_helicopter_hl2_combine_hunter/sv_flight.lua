@@ -72,6 +72,9 @@ local DYING_LEVEL_ANGLE = 5
 --- Share of the remaining pitch and roll error a dying helicopter turns through per second.
 local DYING_LEVEL_RATE = 0.1
 
+--- Farthest above or below itself the autopilot's goal may be, which caps how fast it climbs and sinks and keeps it from overshooting its height by far.
+local AI_CLIMB_REACH = 400
+
 --- Horizontal distance below which the autopilot keeps its facing instead of turning to its goal.
 local FACE_GOAL_MIN_DISTANCE = 50
 
@@ -142,6 +145,8 @@ function ENT:GetFlightGoalAI(reach)
     if ( distance > reach ) then
         delta:Mul(reach / distance)
     end
+
+    delta.z = math.Clamp(delta.z, -AI_CLIMB_REACH, AI_CLIMB_REACH)
 
     delta:Add(self:GetAIAvoidance())
 

@@ -41,6 +41,12 @@ ENT.GunDamagePlayer = 3
 --- Physics force one pulse round carries, which LVS armour compares against its own threshold.
 ENT.GunForce = 1000
 
+--- Rounds of every burst the autopilot aims straight at its enemy; the rest spray the original wide cone.
+ENT.AIGunAimedRounds = 3
+
+--- Spread of the rounds the autopilot aims at its enemy, as the sine of half the cone angle.
+ENT.AIGunAimedSpread = 0.02
+
 --- Number of bombs thrown back with the gravity gun that destroy the helicopter, the original sk_helicopter_num_bombs2.
 ENT.ThrownBombKillCount = 5
 

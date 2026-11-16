@@ -36,6 +36,9 @@ local GUN_ROUNDS_PER_BURST = 5
 --- Spread of the rounds as the sine of half the original 20 degree sk_helicopter_firingcone.
 local GUN_SPREAD = math.sin(math.rad(10))
 
+--- Sine of the angle the autopilot's enemy must be within of the barrel for the aimed rounds of a burst to be fired at it.
+local GUN_AIM_CONE = math.sin(math.rad(15))
+
 --- Cosine of the angle the gun must be within of its target before it starts charging.
 local GUN_CHARGE_CONE = math.cos(math.rad(15))
 
@@ -230,7 +233,7 @@ function ENT:DoGunMuzzleFlash()
     util.Effect("ChopperMuzzleFlash", effectData)
 end
 
---- Fires one burst where the gun points, sending the first round straight at the autopilot's target when it is inside the cone.
+--- Fires one burst where the gun points. The autopilot sends some rounds of every burst straight at its enemy, with only a little spread, as long as the enemy is close enough to where the barrel points.
 ---@param src Vector Position of the muzzle.
 ---@param gunDir Vector Direction the gun points along.
 function ENT:ShootAtFacingDirection(src, gunDir)
@@ -242,9 +245,11 @@ function ENT:ShootAtFacingDirection(src, gunDir)
         local distance = delta:Length()
         local along = delta:Dot(gunDir)
 
-        if ( along > 0 and distance > 0 and (delta - gunDir * along):Length() / distance <= GUN_SPREAD ) then
-            self:FireGunBullets(src, delta / distance, 1, 0)
-            shots = shots - 1
+        if ( along > 0 and distance > 0 and (delta - gunDir * along):Length() / distance <= GUN_AIM_CONE ) then
+            local aimed = math.min(self.AIGunAimedRounds, shots)
+
+            self:FireGunBullets(src, delta / distance, aimed, self.AIGunAimedSpread)
+            shots = shots - aimed
         end
     end
 

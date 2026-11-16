@@ -17,6 +17,12 @@ local AI_GUN_STANDOFF = 1400
 --- Height above its enemy the autopilot keeps while using the gun, the original g_helicopter_bullrush_shoot_height.
 local AI_GUN_HEIGHT = 650
 
+--- Height above an enemy in the air the autopilot keeps while using the gun; none, so that two helicopters fighting each other do not climb to get above one another.
+local AI_GUN_HEIGHT_AIR = 0
+
+--- Least height the helicopter must have over an enemy on the ground to bomb it.
+local AI_BOMB_MIN_HEIGHT = 150
+
 --- Degrees along its circle the autopilot aims ahead of itself, which is what keeps it circling.
 local AI_ORBIT_LEAD = 30
 
@@ -44,8 +50,14 @@ local AI_BOMB_PASS_INTERVAL = 6
 --- Farthest a carpet bomb may be predicted to land from its enemy for the autopilot to release it.
 local AI_CARPET_RELEASE_RADIUS = 1000
 
---- Distance beyond its enemy the autopilot flies to on a carpet bombing run.
-local AI_CARPET_OVERSHOOT = 1500
+--- Distance beyond its enemy the autopilot flies to on a bombing pass or a carpet bombing run, so that it crosses over the enemy instead of stopping above it.
+local AI_RUN_OVERSHOOT = 1500
+
+--- Share of that distance beyond its enemy after which the pass or run counts as flown.
+local AI_RUN_DONE_FRACTION = 0.75
+
+--- Closest horizontal distance to its enemy at which the autopilot starts charging the gun; any closer and it backs off to its circle first instead of shooting straight down.
+local AI_GUN_MIN_RANGE = 800
 
 --- Longest seconds a carpet bombing run may take.
 local AI_CARPET_RUN_TIME = 8
@@ -62,8 +74,14 @@ local AI_MIN_APPROACH_SPEED = 300
 --- Lowest the autopilot's goal may be above the ground.
 local AI_MIN_ALTITUDE = 350
 
---- Height the autopilot adds above an obstacle between it and its goal.
-local AI_OBSTACLE_CLEARANCE = 600
+--- Height between two of the levels the autopilot tries when it looks for a way over an obstacle.
+local AI_DETOUR_STEP = 300
+
+--- Number of levels above its goal the autopilot tries when it looks for a way over an obstacle.
+local AI_DETOUR_STEPS = 5
+
+--- Farthest below a level the helicopter may still be to start crossing the obstacle on it.
+local AI_DETOUR_TOLERANCE = 150
 
 --- Gravity the carpet bombs fall under.
 local AI_CARPET_BOMB_GRAVITY = 400
@@ -80,7 +98,7 @@ local AI_PROBE_HEIGHT = 60
 --- Distance the probes reach to every side.
 local AI_PROBE_RANGE = 700
 
---- Distance the probe below the helicopter reaches.
+--- Distance the probes below and above the helicopter reach.
 local AI_PROBE_RANGE_DOWN = 350
 
 --- Seconds of flight the probe along the helicopter's path looks ahead, on top of the range to every side.
@@ -126,6 +144,12 @@ local AI_WAIT_ORBIT_SPEED = 6
 --- Distance a helicopter in a patrolling convoy keeps behind the one it follows, far enough that their obstacle probes do not touch.
 local AI_CONVOY_SPACING = 1000
 
+--- Highest above the ground a patrolling helicopter's waypoint may be.
+local AI_PATROL_MAX_ALTITUDE = 1200
+
+--- Distance below a patrolling helicopter in which the ground is looked for.
+local AI_PATROL_GROUND_RANGE = 16000
+
 --- Speed the first helicopter of a convoy keeps to, slow enough for the others to catch up and hold their places.
 local AI_CONVOY_LEAD_SPEED = 550
 
@@ -166,7 +190,7 @@ end
 ---@param direction Vector Direction to sweep in.
 ---@param range number Distance to sweep.
 ---@param filter table Entities the sweep ignores.
----@return number fraction Free share of the way between 0 and 1, or 1 when the helicopter already touches something and the sweep says nothing.
+---@return number fraction Free share of the way between 0 and 1, or 1 when the helicopter already touches something and the sweep says nothing. The edge of the map counts as an obstacle like any other.
 local function Probe(origin, direction, range, filter)
     local trace = util.TraceHull({
         start = origin,
@@ -177,12 +201,12 @@ local function Probe(origin, direction, range, filter)
         filter = filter,
     })
 
-    if ( trace.StartSolid or trace.HitSky ) then return 1 end
+    if ( trace.StartSolid ) then return 1 end
 
     return trace.Fraction
 end
 
---- Feels for walls, ground, props and other vehicles around the helicopter and along its path, and works out how far the autopilot's goal has to be pushed away from them.
+--- Feels for walls, ground, ceilings, props and other vehicles around the helicopter and along its path, and works out how far the autopilot's goal has to be pushed away from them. Its own enemy is left out, since the attack already keeps its distance to it and two helicopters fighting each other would otherwise climb away from one another without end.
 function ENT:UpdateAIAvoidance()
     local now = CurTime()
     if ( now < self.aiNextProbe ) then return end
@@ -190,8 +214,10 @@ function ENT:UpdateAIAvoidance()
     self.aiNextProbe = now + AI_PROBE_INTERVAL
 
     local origin = self:WorldSpaceCenter()
-    local filter = self:GetCrosshairFilterEnts()
+    local filter = table.Copy(self:GetCrosshairFilterEnts())
     local avoidance = Vector(0, 0, 0)
+
+    filter[#filter + 1] = self:AIGetTarget()
 
     for _, direction in ipairs(AI_PROBE_DIRECTIONS) do
         local blocked = 1 - Probe(origin, direction, AI_PROBE_RANGE, filter)
@@ -200,6 +226,7 @@ function ENT:UpdateAIAvoidance()
     end
 
     avoidance.z = avoidance.z + (1 - Probe(origin, Vector(0, 0, -1), AI_PROBE_RANGE_DOWN, filter)) * AI_AVOID_STRENGTH
+    avoidance.z = avoidance.z - (1 - Probe(origin, Vector(0, 0, 1), AI_PROBE_RANGE_DOWN, filter)) * AI_AVOID_STRENGTH
 
     local velocity = self:GetVelocity()
     local speed = velocity:Length()
@@ -362,12 +389,10 @@ function ENT:SetAIWeapon(id)
     self:SelectWeapon(id)
 end
 
---- Returns whether an enemy is on the ground below the helicopter, where bombs can reach it.
+--- Returns whether an enemy is on the ground rather than in the air.
 ---@param targetPos Vector Centre of the enemy.
 ---@return boolean bOnGround
 function ENT:IsAITargetOnGround(targetPos)
-    if ( targetPos.z > self:GetPos().z - 150 ) then return false end
-
     local trace = util.TraceLine({
         start = targetPos,
         endpos = targetPos - Vector(0, 0, 400),
@@ -398,20 +423,20 @@ function ENT:GetAIBombsDropped()
     return self.bombsDropped - self.aiStickMark
 end
 
---- Picks what the autopilot does next: it stays on the gun until a burst is over, then flies a bombing pass, or a carpet bombing run if it has lost enough health, and returns to the gun when the pass is done.
+--- Picks what the autopilot does next: it stays on the gun until a burst is over, then flies a bombing pass, or a carpet bombing run if it has lost enough health, and returns to the gun when the pass is done. Enemies in the air, or not far enough below the helicopter, are only ever fought with the gun.
 ---@param targetPos Vector Centre of the enemy.
 function ENT:UpdateAIMode(targetPos)
     local now = CurTime()
-    local bOnGround = self:IsAITargetOnGround(targetPos)
+    local bCanBomb = targetPos.z < self:GetPos().z - AI_BOMB_MIN_HEIGHT and self:IsAITargetOnGround(targetPos)
 
     if ( self.aiMode != AI_MODE_GUN ) then
-        local bDone = now > self.aiModeEndTime or !bOnGround
+        local bDone = now > self.aiModeEndTime or !bCanBomb
 
         if ( self.aiMode == AI_MODE_BOMB and self:GetAIBombsDropped() >= AI_BOMBS_PER_PASS ) then
             bDone = true
         end
 
-        if ( self.aiMode == AI_MODE_CARPET and (self:GetPos() - targetPos):Dot(self.aiRunDirection) > AI_CARPET_OVERSHOOT * 0.75 ) then
+        if ( (self:GetPos() - targetPos):Dot(self.aiRunDirection) > AI_RUN_OVERSHOOT * AI_RUN_DONE_FRACTION ) then
             bDone = true
         end
 
@@ -423,13 +448,13 @@ function ENT:UpdateAIMode(targetPos)
         return
     end
 
-    if ( !bOnGround or !self:IsGunResting() ) then return end
+    if ( !bCanBomb or !self:IsGunResting() ) then return end
+
+    local direction = targetPos - self:GetPos()
+    direction.z = 0
+    direction:Normalize()
 
     if ( self:GetHP() <= self:GetMaxHP() * self.aiNextCarpetHealth ) then
-        local direction = targetPos - self:GetPos()
-        direction.z = 0
-        direction:Normalize()
-
         self.aiNextCarpetHealth = self.aiNextCarpetHealth - AI_CARPET_HEALTH_STEP
         self.aiRunDirection = direction
         self.aiMode = AI_MODE_CARPET
@@ -440,12 +465,13 @@ function ENT:UpdateAIMode(targetPos)
 
     if ( now < self.aiNextBombPass ) then return end
 
+    self.aiRunDirection = direction
     self.aiMode = AI_MODE_BOMB
     self.aiModeEndTime = now + AI_BOMB_PASS_TIME
     self.aiStickMark = self.bombsDropped
 end
 
---- Circles the enemy at gun range, turning around when something blocks the way, and holds still on that circle while the gun charges and fires.
+--- Circles the enemy at gun range, turning around when something blocks the way, and holds still on that circle while the gun charges and fires. It only starts charging from far enough out to shoot at the enemy from the side, and it meets an enemy in the air at that enemy's own height, measured centre to centre so that two helicopters do not each try to get above the other.
 ---@param target Entity Enemy.
 ---@param targetPos Vector Centre of the enemy.
 ---@return Vector goal Position to fly to.
@@ -471,13 +497,19 @@ function ENT:RunAIGun(target, targetPos)
     end
 
     self:SetAIWeapon(self.WEAPON_GUN)
-    self._AIFireInput = self:AICanSee(target)
+    self._AIFireInput = bearing:LengthSqr() >= AI_GUN_MIN_RANGE * AI_GUN_MIN_RANGE and self:AICanSee(target)
     self.bAIFaceTravel = false
 
-    return targetPos + Angle(0, yaw, 0):Forward() * AI_GUN_STANDOFF + Vector(0, 0, AI_GUN_HEIGHT)
+    local height = AI_GUN_HEIGHT
+
+    if ( !self:IsAITargetOnGround(targetPos) ) then
+        height = AI_GUN_HEIGHT_AIR - (self:WorldSpaceCenter().z - self:GetPos().z)
+    end
+
+    return targetPos + Angle(0, yaw, 0):Forward() * AI_GUN_STANDOFF + Vector(0, 0, height)
 end
 
---- Flies over where the enemy is going to be and lets a bomb go whenever it would land close enough.
+--- Flies a straight pass over where the enemy is going to be and on beyond it, letting a bomb go whenever it would land close enough.
 ---@param target Entity Enemy.
 ---@param targetPos Vector Centre of the enemy.
 ---@return Vector goal Position to fly to.
@@ -488,9 +520,9 @@ function ENT:RunAIBombing(target, targetPos)
 
     self:SetAIWeapon(self.WEAPON_BOMBS)
     self._AIFireInput = self:GetAIBombMissDistance(targetPos, targetVelocity, physenv.GetGravity():Length()) < AI_BOMB_RELEASE_RADIUS
-    self.bAIFaceTravel = distance > AI_BOMB_RELEASE_RADIUS
+    self.bAIFaceTravel = true
 
-    return targetPos + targetVelocity * leadTime + Vector(0, 0, AI_BOMB_HEIGHT)
+    return targetPos + targetVelocity * leadTime + self.aiRunDirection * AI_RUN_OVERSHOOT + Vector(0, 0, AI_BOMB_HEIGHT)
 end
 
 --- Rushes in a straight line over the enemy and beyond, carpet bombing everything around it on the way.
@@ -502,12 +534,28 @@ function ENT:RunAICarpetBombing(target, targetPos)
     self._AIFireInput = self:GetAIBombMissDistance(targetPos, target:GetVelocity(), AI_CARPET_BOMB_GRAVITY) < AI_CARPET_RELEASE_RADIUS
     self.bAIFaceTravel = true
 
-    return targetPos + self.aiRunDirection * AI_CARPET_OVERSHOOT + Vector(0, 0, AI_GUN_HEIGHT)
+    return targetPos + self.aiRunDirection * AI_RUN_OVERSHOOT + Vector(0, 0, AI_GUN_HEIGHT)
 end
 
---- Lifts a goal so that it stays clear of the ground, and above whatever stands between it and the helicopter; when the way is blocked the helicopter climbs on the spot first.
+--- Returns whether the helicopter fits through the straight way between two points.
+---@param from Vector Start of the way.
+---@param to Vector End of the way.
+---@return boolean bClear
+local function IsPathClear(from, to)
+    local trace = util.TraceHull({
+        start = from,
+        endpos = to,
+        mins = Vector(-AI_PROBE_WIDTH, -AI_PROBE_WIDTH, -AI_PROBE_HEIGHT),
+        maxs = Vector(AI_PROBE_WIDTH, AI_PROBE_WIDTH, AI_PROBE_HEIGHT),
+        mask = MASK_SOLID_BRUSHONLY,
+    })
+
+    return !trace.Hit or trace.HitSky or trace.StartSolid
+end
+
+--- Lifts a goal so that it stays clear of the ground, and finds a way over whatever stands between it and the helicopter: the lowest level above the goal on which the way across is free. The helicopter first climbs or sinks to that level where it is, then crosses on it, and comes down once the straight way to the goal is free. When no level is free it heads for the goal anyway and leaves it to its probes to keep it off the obstacle.
 ---@param goal Vector Position the autopilot wants to fly to.
----@return Vector goal Position that is safe to fly to.
+---@return Vector goal Position that is safe to fly to next.
 function ENT:ClearAIGoal(goal)
     local pos = self:WorldSpaceCenter()
     local ground = util.TraceLine({
@@ -520,17 +568,19 @@ function ENT:ClearAIGoal(goal)
         goal.z = math.max(goal.z, ground.HitPos.z + AI_MIN_ALTITUDE)
     end
 
-    local blocker = util.TraceHull({
-        start = pos,
-        endpos = goal,
-        mins = Vector(-AI_PROBE_WIDTH, -AI_PROBE_WIDTH, -AI_PROBE_HEIGHT),
-        maxs = Vector(AI_PROBE_WIDTH, AI_PROBE_WIDTH, AI_PROBE_HEIGHT),
-        mask = MASK_SOLID_BRUSHONLY,
-    })
+    if ( IsPathClear(pos, goal) ) then return goal end
 
-    if ( !blocker.Hit or blocker.HitSky or blocker.StartSolid ) then return goal end
+    for step = 1, AI_DETOUR_STEPS do
+        local level = goal.z + step * AI_DETOUR_STEP
 
-    return Vector(pos.x, pos.y, math.max(goal.z, blocker.HitPos.z + AI_OBSTACLE_CLEARANCE))
+        if ( IsPathClear(Vector(pos.x, pos.y, level), Vector(goal.x, goal.y, level)) ) then
+            if ( math.abs(pos.z - level) > AI_DETOUR_TOLERANCE ) then return Vector(pos.x, pos.y, level) end
+
+            return Vector(goal.x, goal.y, level)
+        end
+    end
+
+    return goal
 end
 
 --- Returns where the helicopter attacks from in the mode it has picked.
@@ -542,6 +592,23 @@ function ENT:RunAIAttack(target, targetPos)
     if ( self.aiMode == AI_MODE_BOMB ) then return self:RunAIBombing(target, targetPos) end
 
     return self:RunAIGun(target, targetPos)
+end
+
+--- Brings the waypoint of a wandering helicopter down to patrol height above the ground below it, since the stock wandering otherwise drifts up to the top of the map.
+function ENT:LimitAIPatrolAltitude()
+    local waypoint = self._lvsTargetPos
+    if ( !waypoint ) then return end
+
+    local pos = self:GetPos()
+    local ground = util.TraceLine({
+        start = pos,
+        endpos = pos - Vector(0, 0, AI_PATROL_GROUND_RANGE),
+        mask = MASK_SOLID_BRUSHONLY,
+    })
+
+    if ( !ground.Hit ) then return end
+
+    waypoint.z = math.min(waypoint.z, ground.HitPos.z + AI_PATROL_MAX_ALTITUDE)
 end
 
 --- Patrols without an enemy: a lone helicopter, or the first of a group, wanders like any LVS helicopter, the first of a group at a reduced speed, and every other one of the group follows the one before it in a line, keeping its distance and matching its movement.
@@ -562,6 +629,7 @@ function ENT:RunAIPatrol()
         self.aiSpeedLimit = #group > 1 and AI_CONVOY_LEAD_SPEED or nil
 
         BaseClass.RunAI(self)
+        self:LimitAIPatrolAltitude()
 
         return
     end
