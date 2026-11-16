@@ -6,6 +6,7 @@ include("sv_gun.lua")
 include("sv_bombs.lua")
 include("sv_wash.lua")
 include("sv_damage.lua")
+include("sv_ai.lua")
 
 --- Position of the pilot's seat.
 local SEAT_POS = Vector(120, 0, -40)
@@ -90,6 +91,7 @@ function ENT:OnSpawn(phys)
     self:InitBombs()
     self:InitRotorWash()
     self:InitDamageEffects()
+    self:InitAI()
 
     if ( self.PostOnSpawn ) then
         self:PostOnSpawn(phys)
