@@ -1,129 +1,175 @@
 include("shared.lua")
-function ENT:DamageFX()
-	self.nextDFX = self.nextDFX or 0
-	if self.nextDFX < CurTime() then
-		self.nextDFX = CurTime() + 0.05
-		local HP = self:GetHP()
-		local MaxHP = self:GetMaxHP()
-		if HP > MaxHP * 0.25 then return end
-		local effectdata = EffectData()
-		effectdata:SetOrigin(self:LocalToWorld(Vector(-10, 25, -10)))
-		effectdata:SetNormal(self:GetUp())
-		effectdata:SetMagnitude(math.Rand(0.5, 1.5))
-		effectdata:SetEntity(self)
-		util.Effect("lvs_exhaust_fire", effectdata)
-	end
+
+--- Rotor revolutions per minute at full throttle, as far as the animation is concerned.
+local ROTOR_RPM = 2500
+
+--- Bone of the blurred main rotor disc.
+local BONE_ROTOR_BLUR = 2
+
+--- Bone of the main rotor hub.
+local BONE_BLADE_HULL = 3
+
+--- Bone of the tail rotor.
+local BONE_BLADE_TAIL = 5
+
+--- Yaw rate in degrees per second at which the rudder is fully deflected.
+local RUDDER_YAW_RATE = 30
+
+--- Rudder pose at full deflection.
+local RUDDER_POSE = 45
+
+--- Number of red position lights on the hull.
+local MAX_HELICOPTER_LIGHTS = 3
+
+--- Seconds a position light stays bright, and seconds it then takes to dim.
+local LIGHT_BLINK_TIME_SHORT = 0.1
+
+--- Seconds the position lights stay dim after every second flash.
+local LIGHT_BLINK_TIME = 1
+
+--- Scale of a position light while it is bright.
+local LIGHT_SCALE_ON = 0.5
+
+--- Scale of a position light while it is dim.
+local LIGHT_SCALE_DIM = 0.1
+
+--- World size of a position light sprite at a scale of one.
+local LIGHT_SPRITE_SIZE = 128
+
+--- Colour of the position lights.
+local LIGHT_COLOR = Color(255, 255, 255, 200)
+
+--- Colour of the visible spotlight beam.
+local SPOTLIGHT_BEAM_COLOR = Color(100, 100, 100, 200)
+
+--- Length of the visible spotlight beam.
+local SPOTLIGHT_BEAM_LENGTH = 256
+
+--- Width of the visible spotlight beam and of the glow at its source.
+local SPOTLIGHT_BEAM_WIDTH = 64
+
+ENT.LightSpriteMaterial = Material("sprites/redglow1")
+ENT.SpotlightBeamMaterial = Material("effects/lvs/heli_spotlight")
+ENT.SpotlightGlowMaterial = Material("sprites/light_glow02_add")
+
+--- Returns the scale of the position lights at a point in time: two short flashes, each dimming again right after, followed by a long dim pause.
+---@param time number Time in seconds.
+---@return number scale
+local function GetBlinkScale(time)
+    local phase = time % (4 * LIGHT_BLINK_TIME_SHORT + LIGHT_BLINK_TIME)
+    if ( phase >= 4 * LIGHT_BLINK_TIME_SHORT ) then return LIGHT_SCALE_DIM end
+
+    local step = phase % (2 * LIGHT_BLINK_TIME_SHORT)
+    if ( step < LIGHT_BLINK_TIME_SHORT ) then return LIGHT_SCALE_ON end
+
+    return Lerp((step - LIGHT_BLINK_TIME_SHORT) / LIGHT_BLINK_TIME_SHORT, LIGHT_SCALE_ON, LIGHT_SCALE_DIM)
 end
 
 function ENT:OnFrame()
-	self:AnimRotor()
-	self:AnimTail()
-	self:DamageFX()
-end
-
-function ENT:RemoveLight()
-	if IsValid(self.projector) then
-		self.projector:Remove()
-		self.projector = nil
-	end
+    self:AnimRotor()
+    self:AnimTail()
 end
 
 function ENT:OnRemoved()
-	self:RemoveLight()
+    self:RemoveSpotlight()
 end
 
-function ENT:AnimTail()
-	local yaw = self:GetAngles().y
-	local frameTime = RealFrameTime()
-	local yawRate = frameTime > 0 and math.AngleDifference(yaw, self.rudderLastYaw or yaw) / frameTime or 0
-
-	self.rudderLastYaw = yaw
-	self.rudderYawRate = Lerp(math.min(frameTime * 10, 1), self.rudderYawRate or 0, yawRate)
-
-	self:SetPoseParameter("rudder", math.Remap(math.Clamp(self.rudderYawRate, -30, 30), -30, 30, 45, -45))
-	self:InvalidateBoneCache()
-end
-
+--- Spins the main and tail rotors with the throttle.
 function ENT:AnimRotor()
-	local RPM = self:GetThrottle() * 2500
-	self.RPM = self.RPM and (self.RPM + RPM * RealFrameTime() * 0.5) or 0
-	local Rot1 = Angle(-self.RPM, 0, 0)
-	Rot1:Normalize()
-	local Rot2 = Angle(0, 0, self.RPM)
-	Rot2:Normalize()
-	self:ManipulateBoneAngles(2, Rot1)
-	self:ManipulateBoneAngles(5, Rot2)
-	self:ManipulateBoneAngles(3, Rot2)
+    self.rotorAngle = ((self.rotorAngle or 0) + self:GetThrottle() * ROTOR_RPM * RealFrameTime() * 0.5) % 360
+
+    local hullAngles = Angle(0, 0, self.rotorAngle)
+
+    self:ManipulateBoneAngles(BONE_ROTOR_BLUR, Angle(-self.rotorAngle, 0, 0))
+    self:ManipulateBoneAngles(BONE_BLADE_HULL, hullAngles)
+    self:ManipulateBoneAngles(BONE_BLADE_TAIL, hullAngles)
 end
 
-ENT.LightMaterial = Material("effects/lvs/heli_spotlight")
-ENT.GlowMaterial = Material("sprites/light_glow02_add")
-local LightRedFlashNext = 0
-local LightRedFlastInerta = 0
+--- Deflects the rudder against the helicopter's turning, as the original does from its yaw rate.
+function ENT:AnimTail()
+    local yaw = self:GetAngles().y
+    local frameTime = RealFrameTime()
+    local yawRate = frameTime > 0 and math.AngleDifference(yaw, self.rudderLastYaw or yaw) / frameTime or 0
+
+    self.rudderLastYaw = yaw
+    self.rudderYawRate = Lerp(math.min(frameTime * 10, 1), self.rudderYawRate or 0, yawRate)
+
+    local clamped = math.Clamp(self.rudderYawRate, -RUDDER_YAW_RATE, RUDDER_YAW_RATE)
+
+    self:SetPoseParameter("rudder", math.Remap(clamped, -RUDDER_YAW_RATE, RUDDER_YAW_RATE, RUDDER_POSE, -RUDDER_POSE))
+    self:InvalidateBoneCache()
+end
+
+--- Removes the light the spotlight casts.
+function ENT:RemoveSpotlight()
+    if ( !IsValid(self.spotlight) ) then return end
+
+    self.spotlight:Remove()
+    self.spotlight = nil
+end
+
+--- Returns the light the spotlight casts, creating it on first use.
+---@return ProjectedTexture spotlight
+function ENT:GetSpotlight()
+    if ( IsValid(self.spotlight) ) then return self.spotlight end
+
+    local spotlight = ProjectedTexture()
+    spotlight:SetBrightness(32)
+    spotlight:SetTexture("effects/flashlight/soft")
+    spotlight:SetColor(color_white)
+    spotlight:SetEnableShadows(true)
+    spotlight:SetFarZ(16384)
+    spotlight:SetNearZ(96)
+    spotlight:SetFOV(45)
+
+    self.spotlight = spotlight
+
+    return spotlight
+end
+
+--- Draws the red position lights with their blink pattern.
+function ENT:DrawPositionLights()
+    local size = LIGHT_SPRITE_SIZE * GetBlinkScale(CurTime())
+
+    render.SetMaterial(self.LightSpriteMaterial)
+
+    for index = 0, MAX_HELICOPTER_LIGHTS - 1 do
+        local light = self:GetAttachment(self:LookupAttachment("Light_Red" .. index))
+
+        if ( light ) then
+            render.DrawSprite(light.Pos, size, size, LIGHT_COLOR)
+        end
+    end
+end
+
+--- Draws the spotlight under the nose and moves the light it casts along with the gun.
+function ENT:DrawSpotlight()
+    local attachment = self:GetAttachment(self:LookupAttachment("Spotlight"))
+    if ( !attachment ) then return end
+
+    local direction = attachment.Ang:Forward()
+
+    render.SetMaterial(self.SpotlightGlowMaterial)
+    render.DrawSprite(attachment.Pos + direction * 5, SPOTLIGHT_BEAM_WIDTH, SPOTLIGHT_BEAM_WIDTH, color_white)
+
+    render.SetMaterial(self.SpotlightBeamMaterial)
+    render.DrawBeam(attachment.Pos, attachment.Pos + direction * SPOTLIGHT_BEAM_LENGTH, SPOTLIGHT_BEAM_WIDTH, 0, 0.99, SPOTLIGHT_BEAM_COLOR)
+
+    local spotlight = self:GetSpotlight()
+    spotlight:SetPos(attachment.Pos)
+    spotlight:SetAngles(attachment.Ang)
+    spotlight:Update()
+end
+
 function ENT:PreDrawTranslucent()
-	if not self:GetLightsEnabled() then
-		self:RemoveLight()
-		return true
-	end
+    if ( !self:GetLightsEnabled() ) then
+        self:RemoveSpotlight()
 
-	if LightRedFlashNext < CurTime() and math.Round(CurTime() * 2) % 2 == 0 then
-		local pos = self:GetPos() - self:GetUp() * 48
-		local ang = self:GetAngles()
-		local pos01 = pos + ang:Right() * 96
-		local pos02 = pos - ang:Right() * 96
-		local pos03 = pos - ang:Forward() * 256 + ang:Up() * 64
-		EmitSound("buttons/lightswitch2.wav", pos01, 0, CHAN_AUTO, 1, 50, 0, 100)
-		EmitSound("buttons/lightswitch2.wav", pos02, 0, CHAN_AUTO, 1, 50, 0, 100)
-		EmitSound("buttons/lightswitch2.wav", pos03, 0, CHAN_AUTO, 1, 50, 0, 100)
-		LightRedFlashNext = CurTime() + 0.15
-		LightRedFlastInerta = Lerp(0.2, LightRedFlastInerta, 8)
-	else
-		LightRedFlastInerta = Lerp(0.1, LightRedFlastInerta, 0)
-	end
+        return true
+    end
 
-	for i = 0, 2 do
-		local Light_Red = self:GetAttachment(self:LookupAttachment("Light_Red" .. i))
-		if not Light_Red then continue end
-		local size = 64 + math.sin(CurTime() * 10) * 4
-		size = size * LightRedFlastInerta
-		render.SetMaterial(self.GlowMaterial)
-		render.DrawSprite(Light_Red.Pos, size, size, Color(255, 0, 0, 255))
-		local Light_Red_Dynamic = DynamicLight(self:EntIndex() + i)
-		if Light_Red_Dynamic then
-			Light_Red_Dynamic.pos = Light_Red.Pos
-			Light_Red_Dynamic.r = 255 * LightRedFlastInerta
-			Light_Red_Dynamic.g = 0
-			Light_Red_Dynamic.b = 0
-			Light_Red_Dynamic.brightness = 1 * LightRedFlastInerta
-			Light_Red_Dynamic.Decay = 1000
-			Light_Red_Dynamic.Size = 256
-			Light_Red_Dynamic.DieTime = CurTime() + 1
-		end
-	end
+    self:DrawPositionLights()
+    self:DrawSpotlight()
 
-	local SpotLight = self:GetAttachment(self:LookupAttachment("SpotLight"))
-	if not SpotLight then return true end
-	if not IsValid(self.projector) then
-		local thelamp = ProjectedTexture()
-		thelamp:SetBrightness(32)
-		thelamp:SetTexture("effects/flashlight/soft")
-		thelamp:SetColor(color_white)
-		thelamp:SetEnableShadows(true)
-		thelamp:SetFarZ(1024 * 16)
-		thelamp:SetNearZ(96)
-		thelamp:SetFOV(45)
-		self.projector = thelamp
-	end
-
-	local Dir = SpotLight.Ang:Forward()
-	render.SetMaterial(self.GlowMaterial)
-	render.DrawSprite(SpotLight.Pos + Dir * 5, 64, 64, color_white)
-	render.SetMaterial(self.LightMaterial)
-	render.DrawBeam(SpotLight.Pos, SpotLight.Pos + Dir * 256, 64, 0, 0.99, Color(100, 100, 100, 200))
-	if IsValid(self.projector) then
-		self.projector:SetPos(SpotLight.Pos)
-		self.projector:SetAngles(SpotLight.Ang)
-		self.projector:Update()
-	end
-	return true
+    return true
 end
