@@ -111,6 +111,7 @@ function ENT:FireMachineGun()
         Dir = muzzle.Ang:Forward(),
         Spread = Vector(spread, spread, 0),
         Tracer = 0,
+        TracerName = "none",
         AmmoType = "AR2",
         Damage = GetSetting("lvs_car_hl2_combineapc_damage", 3),
         Distance = MACHINE_GUN_RANGE,
@@ -130,7 +131,7 @@ function ENT:FireMachineGun()
     self:EmitSound("Weapon_AR2.Single")
 end
 
---- Draws the original tracer of a machine gun round from the muzzle to where it hit. The engine's own tracer would start at the model's first attachment, which on this model sits in the middle of the hull.
+--- Draws the original tracer of a machine gun round from the muzzle to where it hit. The engine's own tracer would start at the model's first attachment, which on this model sits at the front of the hull, and the tracer rate of zero is turned back into one by the time the bullets are fired, so the bullets are given a tracer effect that does not exist instead.
 ---@param startPos Vector Position of the muzzle.
 ---@param endPos Vector Where the round hit.
 function ENT:DrawMachineGunTracer(startPos, endPos)
