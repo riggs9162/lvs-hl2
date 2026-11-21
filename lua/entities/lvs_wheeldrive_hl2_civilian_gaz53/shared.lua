@@ -14,7 +14,6 @@ ENT.AdminSpawnable = false
 ENT.EngineCurve = 0.25
 ENT.EngineTorque = 300
 ENT.MDL = "models/source_vehicles/truck003a_01.mdl"
-ENT.MassCenterOverride = Vector(-40, 0, 40)
 ENT.MaxHealth = 1600
 ENT.MaxVelocity = 1200
 ENT.PhysicsMass = 3200
