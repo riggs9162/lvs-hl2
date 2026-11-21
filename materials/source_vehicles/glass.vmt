@@ -1,0 +1,12 @@
+"VertexLitGeneric"
+{
+
+	"$baseTexture" "source_vehicles/glass"
+	"$translucent" 1
+	"$alpha" 1
+	"$envmapmask"	"source_vehicles/glass_spec"
+	"$envmap" "env_cubemap"
+	"$envmaptint" "[ .75 .75 1]"
+	"$envmapcontrast" 1
+	"$envmapsaturation" 1
+}

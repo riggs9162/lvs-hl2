@@ -1,0 +1,12 @@
+
+"VertexLitGeneric"
+{
+	"$basetexture" "source_vehicles\junk_cars\lab_objects02"
+	"$surfaceprop" "metal"
+	"$selfillum" 1
+//	"$envmap" "env_cubemap"
+	"$envmapmask" "source_vehicles\junk_cars\lab_objects02_mask"
+
+	
+}
+

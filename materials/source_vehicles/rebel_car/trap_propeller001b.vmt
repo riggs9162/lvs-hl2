@@ -1,0 +1,9 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "source_vehicles\rebel_car\Trap_Propeller001b"
+//	"$envmap" "env_cubemap"
+	"$basealphaenvmapmask" 1
+	"$envmaptint" .3 .3 .3	
+}
+
+

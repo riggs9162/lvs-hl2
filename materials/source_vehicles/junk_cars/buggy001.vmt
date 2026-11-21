@@ -1,0 +1,10 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "source_vehicles\junk_cars\buggy001"
+	"$surfaceprop" "metal"
+	"$envmap" "env_cubemap"
+ 	"$basealphaenvmapmask" 1
+	"$envmaptint" "[ .5 .5 .5]"
+}
+
+
