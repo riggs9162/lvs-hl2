@@ -1,4 +1,4 @@
---- Flight model of the Half-Life 2 helicopters, ported from ComputeVelocity and ComputeAngularVelocity of the attack helicopter (npc_attackchopper.cpp), the drag helpers of their base class (cbasehelicopter.cpp) and the Flight of the gunship (npc_combinegunship.cpp), which differ only in the numbers below. The defaults are those of the attack helicopter; a helicopter that flies differently sets the ENT fields FlightGoalPitchScale, FlightGoalPitchMin, FlightGoalPitchMax, FlightSidewaysDrag and bFlightHeightDampening, and may set flightGeneralDrag while it has to stop quickly.
+--- Flight model of the Half-Life 2 helicopters, ported from ComputeVelocity and ComputeAngularVelocity of the attack helicopter (npc_attackchopper.cpp), the drag helpers of their base class (cbasehelicopter.cpp) and the Flight of the gunship (npc_combinegunship.cpp), which differ only in the numbers below. The defaults are those of the attack helicopter; a helicopter that flies differently sets the ENT fields FlightGoalPitchScale, FlightGoalPitchMin, FlightGoalPitchMax, FlightSidewaysDrag, FlightAccelRate and bFlightHeightDampening, and may set flightGeneralDrag while it has to stop quickly.
 
 --- Gravity the original helicopter flies under, in units per second squared.
 local HELICOPTER_GRAVITY = 384
@@ -443,7 +443,7 @@ function ENT:PhysicsSimulate(phys, deltatime)
 
     self.flightRollDamage = math.Approach(self.flightRollDamage or 0, 0, ROLL_DAMAGE_DECAY * deltatime)
 
-    local reach = math.min(velocity:Length() + CHOPPER_ACCEL_RATE, self.MaxVelocity)
+    local reach = math.min(velocity:Length() + (self.FlightAccelRate or CHOPPER_ACCEL_RATE), self.MaxVelocity)
     local delta, faceYaw = self:GetFlightGoal(reach, deltatime)
     local throttle = self:GetThrottle()
 
