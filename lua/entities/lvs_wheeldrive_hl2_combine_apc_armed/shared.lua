@@ -7,8 +7,26 @@ ENT.Spawnable = true
 ENT.VehicleCategory = "Half Life 2"
 ENT.VehicleSubCategory = "Combine"
 
+DEFINE_BASECLASS("lvs_wheeldrive_hl2_combine_apc")
+
 include("entities/lvs_tank_wheeldrive/modules/sh_turret.lua")
 include("entities/lvs_tank_wheeldrive/modules/sh_turret_ballistics.lua")
+
+if ( CLIENT ) then
+    --- Aims the turret and then runs the APC's own steering animation and engine sounds, which the turret module would otherwise replace.
+    function ENT:UpdatePoseParameters(...)
+        self:CalcTurret()
+
+        BaseClass.UpdatePoseParameters(self, ...)
+    end
+else
+    --- Aims the turret and then runs the APC's own tick, which the turret module would otherwise replace.
+    function ENT:OnTick()
+        self:AimTurret()
+
+        BaseClass.OnTick(self)
+    end
+end
 
 ENT.TurretBallisticsMuzzleAttachment = "muzzle"
 ENT.TurretAimRate = 100
