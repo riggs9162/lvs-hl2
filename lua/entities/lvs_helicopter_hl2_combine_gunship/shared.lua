@@ -5,226 +5,234 @@ ENT.Information = "Combine Synth Gunship from Half Life 2 + Episodes"
 ENT.Category = "[LVS] - Half Life 2"
 ENT.IconOverride = "materials/entities/lvs/hl2/combine_gunship.png"
 
-ENT.AITEAM = 1
-ENT.AdminSpawnable = false
-ENT.DisableBallistics = true
-ENT.ForceAngleDampingMultiplier = 1
-ENT.ForceAngleMultiplier = 1
-ENT.ForceLinearDampingMultiplier = 1.5
-ENT.GibModels = {"models/gibs/gunship_gibs_engine.mdl", "models/gibs/gunship_gibs_eye.mdl", "models/gibs/gunship_gibs_headsection.mdl", "models/gibs/gunship_gibs_midsection.mdl", "models/gibs/gunship_gibs_nosegun.mdl", "models/gibs/gunship_gibs_sensorarray.mdl", "models/gibs/gunship_gibs_tailsection.mdl", "models/gibs/gunship_gibs_wing.mdl"}
-ENT.MDL = "models/riggs9162/vehicles/combine_gunship.mdl"
-ENT.MaxHealth = 1600
-ENT.MaxVelocity = 2150
-ENT.Spawnable = true
-ENT.ThrottleRateDown = 0.2
-ENT.ThrottleRateUp = 0.2
-ENT.ThrustDown = 0.8
-ENT.ThrustRate = 1
-ENT.ThrustUp = 1
-ENT.TurnRatePitch = 1
-ENT.TurnRateRoll = 1
-ENT.TurnRateYaw = 1
 ENT.VehicleCategory = "Half Life 2"
 ENT.VehicleSubCategory = "Combine"
 
-ENT.EngineSounds = {
-	{
-		sound = "^npc/combine_gunship/engine_whine_loop1.wav",
-		--sound_int = "lvs/vehicles/helicopter/loop_interior.wav",
-		Pitch = 0,
-		PitchMin = 0,
-		PitchMax = 255,
-		PitchMul = 100,
-		Volume = 1,
-		VolumeMin = 0,
-		VolumeMax = 1,
-		SoundLevel = 125,
-		UseDoppler = true,
-	},
-	{
-		sound = "npc/combine_gunship/engine_rotor_loop1.wav",
-		Pitch = 0,
-		PitchMin = 0,
-		PitchMax = 255,
-		PitchMul = 100,
-		Volume = 1,
-		VolumeMin = 0,
-		VolumeMax = 1,
-		SoundLevel = 125,
-		UseDoppler = true,
-	},
+ENT.Spawnable = true
+ENT.AdminSpawnable = false
+
+ENT.MDL = "models/riggs9162/vehicles/combine_gunship.mdl"
+ENT.GibModels = {
+    "models/gibs/gunship_gibs_engine.mdl",
+    "models/gibs/gunship_gibs_eye.mdl",
+    "models/gibs/gunship_gibs_headsection.mdl",
+    "models/gibs/gunship_gibs_midsection.mdl",
+    "models/gibs/gunship_gibs_nosegun.mdl",
+    "models/gibs/gunship_gibs_sensorarray.mdl",
+    "models/gibs/gunship_gibs_tailsection.mdl",
+    "models/gibs/gunship_gibs_wing.mdl",
 }
 
+ENT.AITEAM = 1
+ENT.MaxHealth = 1600
+ENT.DisableBallistics = true
+
+--- Top speed of the original, GUNSHIP_MAX_SPEED.
+ENT.MaxVelocity = 1056
+
+ENT.ThrottleRateUp = 0.2
+ENT.ThrottleRateDown = 0.2
+ENT.ThrustRate = 1
+
+--- The gunship leans fully into its goal acceleration, unlike the attack helicopter, which only leans three quarters of the way.
+ENT.FlightGoalPitchScale = 1
+
+--- Steepest nose-up pitch goal of the original in degrees.
+ENT.FlightGoalPitchMin = -45
+
+--- Steepest nose-down pitch goal of the original in degrees.
+ENT.FlightGoalPitchMax = 60
+
+--- Share of the sideways velocity the original loses per think tick.
+ENT.FlightSidewaysDrag = 0.04
+
+--- The gunship does not hold back its horizontal acceleration while it dives, as the attack helicopter does.
+ENT.bFlightHeightDampening = false
+
+--- No LVS engine sounds; the gunship plays the rotor, exhaust and blast loops of the original itself.
+ENT.EngineSounds = {}
+
+include("sh_body.lua")
+
+--- Weapon slot of the pulse cannon.
+ENT.WEAPON_CANNON = 1
+
+--- Weapon slot of the belly cannon.
+ENT.WEAPON_BELLY_CANNON = 2
+
+--- Weapon slot that holds both cannons back.
+ENT.WEAPON_NONE = 3
+
+--- Weapon slot of the spotlight switch.
+ENT.WEAPON_SPOTLIGHT = 4
+
+--- Colour of a crosshair the weapon cannot reach.
+local color_red = Color(255, 0, 0)
+
+--- Does nothing, for weapons whose pacing is not a real overheat.
+local function IgnoreOverheat()
+end
+
+--- Plays the sound of switching to a weapon.
+---@param ent Entity Gunship.
+local function PlaySelectSound(ent)
+    ent:EmitSound("physics/metal/weapon_impact_soft3.wav")
+end
+
 function ENT:OnSetupDataTables()
-	self:AddDT("Entity", "Body")
-	self:AddDT("Bool", "SpotlightEnabled")
+    self:AddDT("Entity", "Body")
+    self:AddDT("Bool", "SpotlightEnabled")
+    self:AddDT("Bool", "GroundAttacking")
+    self:AddDT("Vector", "GroundAttackHitPos")
+    self:AddDT("Vector", "HeadTarget")
+    self:AddDT("Float", "RotorForce")
 end
 
-function ENT:GetAimAngles()
-	local Muzzle = self:GetAttachment(self:LookupAttachment("muzzle"))
-	if not Muzzle then return end
-	local trace = self:GetEyeTrace()
-	local AimAngles = self:WorldToLocalAngles((trace.HitPos - Muzzle.Pos):GetNormalized():Angle())
-	return AimAngles
+--- Returns the position and direction of an attachment of the gunship's body.
+---@param name string Attachment name.
+---@return table|nil attachment Table with Pos and Ang, or nil without a body.
+function ENT:GetBodyAttachment(name)
+    local body = self:GetBody()
+    if ( !IsValid(body) ) then return nil end
+
+    return body:GetAttachment(body:LookupAttachment(name))
 end
 
-function ENT:WeaponsInRange()
-	return self:AngleBetweenNormal(self:GetForward(), self:GetAimVector()) < 75
+--- Returns where the belly cannon would strike: straight below its muzzle, as in CNPC_CombineGunship::GetGroundAttackHitPosition.
+---@return Vector|nil hitPos
+---@return Vector|nil muzzlePos
+function ENT:GetGroundAttackHitPosition()
+    local muzzle = self:GetBodyAttachment("bellygun")
+    if ( !muzzle ) then return nil end
+
+    local trace = util.TraceLine({
+        start = muzzle.Pos,
+        endpos = muzzle.Pos - Vector(0, 0, 56756),
+        mask = MASK_SHOT,
+        filter = self:GetCrosshairFilterEnts(),
+    })
+
+    return trace.HitPos, muzzle.Pos
 end
 
-function ENT:BellyInRange()
-	return self:AngleBetweenNormal(-self:GetUp(), self:GetAimVector()) < 45
+--- Draws the crosshair where the cannon's muzzle points, red while the target is too far off the muzzle for the cannon to fire.
+---@param ent Entity Gunship.
+local function PaintCannonCrosshair(ent)
+    local muzzle = ent:GetBodyAttachment("muzzle")
+    if ( !muzzle ) then return end
+
+    local aimPos = ent:GetEyeTrace().HitPos
+    local trace = util.TraceLine({
+        start = muzzle.Pos,
+        endpos = muzzle.Pos + muzzle.Ang:Forward() * 50000,
+        filter = ent:GetCrosshairFilterEnts(),
+    })
+
+    local bInCone = (aimPos - muzzle.Pos):GetNormalized():Dot(muzzle.Ang:Forward()) >= ent.CannonFireDot
+
+    ent:PaintCrosshairOuter(trace.HitPos:ToScreen(), bInCone and color_white or color_red)
+    ent:PaintCrosshairCenter(aimPos:ToScreen(), color_white)
+    ent:LVSPaintHitMarker(aimPos:ToScreen())
 end
 
-local color_red = Color(255, 0, 0, 255)
+--- Draws the crosshair on the spot right below the belly cannon.
+---@param ent Entity Gunship.
+local function PaintBellyCrosshair(ent)
+    local hitPos = ent:GetGroundAttackHitPosition()
+    if ( !hitPos ) then return end
+
+    local screenPos = hitPos:ToScreen()
+
+    ent:PaintCrosshairSquare(screenPos, color_white)
+    ent:LVSPaintHitMarker(screenPos)
+end
+
+--- Smallest cosine between the cannon's muzzle and its target at which a round still leaves, from CNPC_CombineGunship::FireCannonRound.
+ENT.CannonFireDot = 0.8
+
+--- Registers the pulse cannon: holding the trigger warms it up and then fires bursts of rounds with a pause after each, as in the original.
+function ENT:AddCannonWeapon()
+    self:AddWeapon({
+        Icon = Material("lvs/weapons/mg.png"),
+        Ammo = -1,
+        Delay = 0,
+        HeatRateUp = 0,
+        HeatRateDown = 0,
+        OnThink = function(ent, bActive)
+            if ( ent.CannonThink ) then
+                ent:CannonThink(bActive and ent:WeaponsShouldFire() == true)
+            end
+        end,
+        OnSelect = PlaySelectSound,
+        OnDeselect = function(ent)
+            if ( ent.StopCannonBurst ) then
+                ent:StopCannonBurst()
+            end
+        end,
+        OnOverheat = IgnoreOverheat,
+        HudPaint = PaintCannonCrosshair,
+    })
+end
+
+--- Registers the belly cannon, which charges for three seconds and then blasts the ground straight below.
+function ENT:AddBellyCannonWeapon()
+    self:AddWeapon({
+        Icon = Material("lvs/weapons/warplaser.png"),
+        Ammo = -1,
+        Delay = 0,
+        HeatRateUp = 0,
+        HeatRateDown = 0,
+        Attack = function(ent)
+            if ( ent.TryGroundAttack ) then
+                ent:TryGroundAttack()
+            end
+        end,
+        OnThink = function(ent)
+            if ( ent.UpdateGroundAttackHeat ) then
+                ent:UpdateGroundAttackHeat()
+            end
+        end,
+        OnSelect = PlaySelectSound,
+        OnOverheat = IgnoreOverheat,
+        HudPaint = PaintBellyCrosshair,
+    })
+end
+
+--- Registers the empty slot that holds both cannons back.
+function ENT:AddHolsterWeapon()
+    self:AddWeapon({
+        Icon = Material("lvs/weapons/tank_noturret.png"),
+        Ammo = -1,
+        Delay = 0,
+        HeatRateUp = 0,
+        HeatRateDown = 0,
+    })
+end
+
+--- Registers the spotlight switch.
+function ENT:AddSpotlightWeapon()
+    self:AddWeapon({
+        Icon = Material("lvs/weapons/light.png"),
+        UseableByAI = false,
+        Ammo = -1,
+        Delay = 0,
+        HeatRateUp = 0,
+        HeatRateDown = 0,
+        StartAttack = function(ent)
+            if ( ent:GetAI() ) then return end
+
+            ent:EmitSound("items/flashlight1.wav", 75, 105)
+
+            if ( ent.SetSpotlight ) then
+                ent:SetSpotlight(!ent:GetSpotlightEnabled())
+            end
+        end,
+    })
+end
+
 function ENT:InitWeapons()
-	local weapon = {}
-	weapon.Icon = Material("lvs/weapons/mg.png")
-	weapon.Ammo = -1
-	weapon.Delay = 0.1
-	weapon.HeatRateUp = 0.2
-	weapon.HeatRateDown = 0.25
-	weapon.StartAttack = function(ent)
-		if not IsValid(ent.weaponSND) then return end
-		ent.weaponSND:EmitSound("NPC_CombineGunship.CannonStartSound")
-		self.ShouldPlaySND = true
-	end
-
-	weapon.FinishAttack = function(ent)
-		if not IsValid(ent.weaponSND) then return end
-		self.ShouldPlaySND = false
-		ent.weaponSND:Stop()
-		ent.weaponSND:EmitSound("NPC_CombineGunship.CannonStopSound")
-	end
-
-	weapon.Attack = function(ent)
-		if not ent:WeaponsInRange() then
-			ent.ShouldPlaySND = false
-			return true
-		end
-
-		ent.ShouldPlaySND = true
-		local Body = ent:GetBody()
-		if not IsValid(Body) then return end
-		local Muzzle = Body:GetAttachment(Body:LookupAttachment("muzzle"))
-		if not Muzzle then return end
-		local trace = ent:GetEyeTrace()
-		local bullet = {}
-		bullet.Src = Muzzle.Pos
-		bullet.Dir = (trace.HitPos - Muzzle.Pos):GetNormalized()
-		bullet.Spread = Vector(0.02, 0.02, 0.02)
-		bullet.TracerName = "lvs_pulserifle_tracer_large"
-		bullet.Force = 2000
-		bullet.HullSize = 6
-		bullet.Damage = 18
-		bullet.Velocity = 12000
-		bullet.Attacker = self:GetDriver()
-		bullet.Callback = function(att, tr, dmginfo)
-			local effectdata = EffectData()
-			effectdata:SetOrigin(tr.HitPos + tr.HitNormal)
-			effectdata:SetNormal(tr.HitNormal * 2)
-			effectdata:SetRadius(10)
-			util.Effect("cball_bounce", effectdata, true, true)
-		end
-
-		self:LVSFireBullet(bullet)
-		local effectdata = EffectData()
-		effectdata:SetOrigin(Muzzle.Pos)
-		effectdata:SetNormal(Muzzle.Ang:Forward())
-		effectdata:SetEntity(ent)
-		util.Effect("lvs_pulserifle_muzzle", effectdata)
-		ent:TakeAmmo()
-	end
-
-	weapon.OnThink = function(ent, active)
-		if not IsValid(ent.weaponSND) then return end
-		local ShouldPlay = ent.ShouldPlaySND and active
-		if ent._oldShouldPlaySND != ShouldPlay then
-			ent._oldShouldPlaySND = ShouldPlay
-			if ShouldPlay then
-				ent.weaponSND:Play()
-			else
-				ent.weaponSND:Stop()
-			end
-		end
-	end
-
-	weapon.OnSelect = function(ent) ent:EmitSound("physics/metal/weapon_impact_soft3.wav") end
-	self:AddWeapon(weapon)
-
-	weapon = {}
-	weapon.Icon = Material("lvs/weapons/warplaser.png")
-	weapon.Ammo = -1
-	weapon.Delay = 4
-	weapon.HeatRateUp = 0
-	weapon.HeatRateDown = 0.05
-	weapon.Attack = function(ent)
-		if ent:GetAI() and not ent:BellyInRange() then return true end
-		ent:SetHeat(100)
-		ent:SetOverheated(true)
-		local effectdata = EffectData()
-		effectdata:SetOrigin(ent:GetPos())
-		effectdata:SetEntity(ent:GetBody())
-		util.Effect("lvs_warpcannon_charge", effectdata)
-		timer.Simple(2, function()
-			if not IsValid(ent) then return end
-			effectdata = EffectData()
-			effectdata:SetOrigin(ent:GetPos())
-			effectdata:SetEntity(ent:GetBody())
-			util.Effect("lvs_warpcannon_fire", effectdata)
-			timer.Simple(0.2, function()
-				if not IsValid(ent) then return end
-				ent:FireBellyCannon()
-			end)
-		end)
-	end
-
-	weapon.OnSelect = function(ent) ent:EmitSound("physics/metal/weapon_impact_soft3.wav") end
-	weapon.HudPaint = function(ent, X, Y, client)
-		local base = ent:GetBody()
-		if not IsValid(base) then return end
-		local Muzzle = base:GetAttachment(base:LookupAttachment("bellygun"))
-		if not Muzzle then return end
-		local trace = util.TraceLine({
-			start = Muzzle.Pos,
-			endpos = Muzzle.Pos + base:GetAimVector() * 50000,
-			mask = MASK_SOLID_BRUSHONLY
-		})
-
-		local Pos2D = trace.HitPos:ToScreen()
-		ent:PaintCrosshairSquare(Pos2D, ent:BellyInRange() and color_white or color_red)
-		ent:LVSPaintHitMarker(Pos2D)
-	end
-
-	self:AddWeapon(weapon)
-
-	weapon = {}
-	weapon.Icon = Material("lvs/weapons/tank_noturret.png")
-	weapon.Ammo = -1
-	weapon.Delay = 0
-	weapon.HeatRateUp = 0
-	weapon.HeatRateDown = 0
-	self:AddWeapon(weapon)
-
-	weapon = {}
-	weapon.Icon = Material("lvs/weapons/light.png")
-	weapon.Ammo = -1
-	weapon.Delay = 0
-	weapon.HeatRateUp = 0
-	weapon.HeatRateDown = 0
-	weapon.StartAttack = function(ent)
-		if ent:GetAI() then return end
-		ent:EmitSound("items/flashlight1.wav", 75, 105)
-		if ent:GetSpotlightEnabled() then
-			if IsValid(ent._spotlight) then ent._spotlight:Fire("LightOff", "", 0) end
-			if IsValid(ent._spotlightSprite) then ent._spotlightSprite:Fire("HideSprite", "", 0) end
-		else
-			if IsValid(ent._spotlight) then ent._spotlight:Fire("LightOn", "", 0) end
-			if IsValid(ent._spotlightSprite) then ent._spotlightSprite:Fire("ShowSprite", "", 0) end
-		end
-
-		ent:SetSpotlightEnabled(not ent:GetSpotlightEnabled())
-	end
-
-	self:AddWeapon(weapon)
+    self:AddCannonWeapon()
+    self:AddBellyCannonWeapon()
+    self:AddHolsterWeapon()
+    self:AddSpotlightWeapon()
 end
