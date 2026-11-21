@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Source engine binary formats
+*.mdl binary
+*.phy binary
+*.vvd binary
+*.vtx binary
+*.vtf binary
+*.png binary
+*.ani binary
