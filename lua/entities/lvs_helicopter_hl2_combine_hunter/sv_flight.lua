@@ -39,8 +39,11 @@ local GOAL_PITCH_MAX = 45
 --- Steepest roll goal in degrees.
 local GOAL_ROLL_MAX = 45
 
---- Share of the tilt towards the goal acceleration that is used as the pitch goal while a player flies. The goal is measured from the current attitude, so a share of s settles at s / (1 + s) of the tilt asked for: the original 0.75 leans the nose only three sevenths of the way, this leans it six sevenths.
-local PILOT_GOAL_PITCH_SCALE = 6
+--- Share of the lean the goal acceleration asks for that a player's helicopter tips its nose by. Unlike the original, which measures its goal from its current attitude and so reaches only three sevenths of the lean, this is measured from level and does not swing back and forth.
+local PILOT_GOAL_PITCH_SHARE = 0.85
+
+--- Degrees per second by which a player's pitch goal may move, so that the nose eases into a new lean instead of overshooting it.
+local PILOT_PITCH_SLEW = 60
 
 --- Steepest nose-down pitch goal in degrees while a player flies.
 local PILOT_GOAL_PITCH_MAX = 60
@@ -305,10 +308,21 @@ function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime)
     local angles = self:GetAngles()
     local goalUp = goalAccel:GetNormalized()
     local bPilot = !self:GetAI()
-    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * (bPilot and PILOT_GOAL_PITCH_SCALE or GOAL_PITCH_SCALE)
+    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * GOAL_PITCH_SCALE
+
     local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)) + (self.flightRollDamage or 0))
 
-    goalPitch = math.Clamp(goalPitch, GOAL_PITCH_MIN, bPilot and PILOT_GOAL_PITCH_MAX or GOAL_PITCH_MAX)
+    goalPitch = math.Clamp(goalPitch, GOAL_PITCH_MIN, GOAL_PITCH_MAX)
+
+    if ( bPilot ) then
+        local flatForward = Angle(0, angles.y, 0):Forward()
+        local wantedPitch = math.deg(math.atan2(goalAccel:Dot(flatForward), goalAccel.z)) * PILOT_GOAL_PITCH_SHARE
+
+        wantedPitch = math.Clamp(wantedPitch, GOAL_PITCH_MIN, PILOT_GOAL_PITCH_MAX)
+        goalPitch = math.Approach(self.flightPilotPitch or angles.p, wantedPitch, PILOT_PITCH_SLEW * deltatime)
+        self.flightPilotPitch = goalPitch
+    end
+
     goalRoll = math.Clamp(goalRoll, -GOAL_ROLL_MAX, GOAL_ROLL_MAX)
 
     local sinPitch = math.sin(math.rad(angles.p))
@@ -414,6 +428,7 @@ function ENT:PhysicsSimulate(phys, deltatime)
     if ( throttle <= 0 or ( self:GetThrust() <= 0 and self:HitGround() ) ) then
         self.flightLift = 0
         self.flightAngAccel = nil
+        self.flightPilotPitch = nil
 
         return self:PhysicsSimulateOverride(Vector(0, 0, 0), Vector(0, 0, 0), phys, deltatime, SIM_NOTHING)
     end
