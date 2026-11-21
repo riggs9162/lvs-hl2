@@ -13,6 +13,17 @@ ENT.MDL_DESTROYED = "models/combine_apc_destroyed_gib01.mdl"
 ENT.Spawnable = true
 ENT.TransGears = 1
 ENT.TransGearsReverse = 1
+
+--- Whether the vehicle behaves like the Half-Life 2 APC: how it takes damage and falls apart, its engine sounds and the danger it warns NPCs about.
+ENT.HL2APC = true
+
+--- Top speed of 35 mph and reverse speed of 20 mph, from the Half-Life 2 vehicle script (scripts/vehicles/apc.txt).
+ENT.MaxVelocity = 616
+ENT.MaxVelocityReverse = 352
+
+--- Mass of 1600 kg, from the vehicle script.
+ENT.PhysicsMass = 1600
+
 ENT.VehicleCategory = "Half Life 2"
 ENT.VehicleSubCategory = "Combine"
 

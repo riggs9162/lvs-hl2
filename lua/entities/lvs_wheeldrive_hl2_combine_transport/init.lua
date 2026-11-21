@@ -23,44 +23,7 @@ function ENT:OnSpawn(PObj)
 
     self:AddEngine(Vector(0, 87, 50))
 
-    local FL, FR, RL, RR, ForwardAngle = self:AddWheelsUsingRig(25, 25)
-    self:DefineAxle({
-        Axle = {
-            ForwardAngle = ForwardAngle,
-            SteerType = LVS.WHEEL_STEER_FRONT,
-            SteerAngle = 45,
-            TorqueFactor = 0.3,
-            BrakeFactor = 1,
-        },
-        Wheels = {FL, FR},
-        Suspension = {
-            Height = 24,
-            MaxTravel = 8,
-            ControlArmLength = 128,
-            SpringConstant = 5000,
-            SpringDamping = 1000,
-            SpringRelativeDamping = 1000,
-        },
-    })
-
-    self:DefineAxle({
-        Axle = {
-            ForwardAngle = ForwardAngle,
-            SteerType = LVS.WHEEL_STEER_NONE,
-            TorqueFactor = 0.7,
-            BrakeFactor = 1,
-            UseHandbrake = true,
-        },
-        Wheels = {RL, RR},
-        Suspension = {
-            Height = 24,
-            MaxTravel = 8,
-            ControlArmLength = 128,
-            SpringConstant = 5000,
-            SpringDamping = 1000,
-            SpringRelativeDamping = 1000,
-        },
-    })
+    self:AddHL2Wheels(25, 25)
 
     local var = GetConVar("lvs_car_hl2_combinetransport_health") and GetConVar("lvs_car_hl2_combinetransport_health"):GetInt() or 1600
     self.MaxHealth = var
