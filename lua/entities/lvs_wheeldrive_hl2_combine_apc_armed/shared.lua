@@ -13,9 +13,9 @@ include("entities/lvs_tank_wheeldrive/modules/sh_turret.lua")
 include("entities/lvs_tank_wheeldrive/modules/sh_turret_ballistics.lua")
 
 if ( CLIENT ) then
-    --- Aims the turret and then runs the APC's own steering animation and engine sounds, which the turret module would otherwise replace.
+    --- Aims the turret on every frame for everyone watching, not only for its gunner as the turret module does, so that it turns smoothly instead of in the steps the server sends, and then runs the APC's own steering animation and engine sounds, which the turret module would otherwise replace.
     function ENT:UpdatePoseParameters(...)
-        self:CalcTurret()
+        self:AimTurret()
 
         BaseClass.UpdatePoseParameters(self, ...)
     end
