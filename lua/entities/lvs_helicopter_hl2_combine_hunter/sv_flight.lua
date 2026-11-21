@@ -18,6 +18,9 @@ local HELICOPTER_MAX_DZ_DAMP = -1000
 --- Speed the autopilot's goal may run ahead of its current speed, in units per second.
 local CHOPPER_ACCEL_RATE = 500
 
+--- Smallest cosine of the nose tilt the rotor force is raised for, which caps the extra force at two and a half times the normal one.
+local PITCH_LIFT_MIN_COS = 0.4
+
 --- Share of the horizontal acceleration that is added to the rotor force.
 local HORIZONTAL_LIFT_FACTOR = 0.1
 
@@ -247,9 +250,10 @@ end
 ---@param delta Vector World space offset to the goal position.
 ---@param velocity Vector Current world space velocity.
 ---@param deltatime number Length of the physics step in seconds.
----@param forceBlend number Share of the previous rotor force kept per original think tick.
+---@param forceBlend number|nil Share of the previous rotor force kept per original think tick.
+---@param bPitchLift boolean|nil Whether to raise the rotor force by as much as the nose is tilted down, so that the helicopter holds its height in a steep forward lean instead of sinking; the original's own allowance for leaning shrinks by the same amount so the two do not add up.
 ---@return Vector goalAccel Acceleration the helicopter leans into, gravity compensation included.
-function ENT:UpdateFlightLift(delta, velocity, deltatime, forceBlend)
+function ENT:UpdateFlightLift(delta, velocity, deltatime, forceBlend, bPitchLift)
     local goalAccel = (delta - velocity) * 2
     goalAccel.z = math.Clamp(goalAccel.z + HELICOPTER_GRAVITY, HELICOPTER_GRAVITY * 0.2, HELICOPTER_GRAVITY * 2)
 
@@ -269,8 +273,16 @@ function ENT:UpdateFlightLift(delta, velocity, deltatime, forceBlend)
         end
     end
 
+    local lift = goalAccel.z + horizontalLift
+
+    if ( bPitchLift ) then
+        local noseDownCos = math.max(math.cos(math.rad(math.max(self:GetAngles().p, 0))), PITCH_LIFT_MIN_COS)
+
+        lift = goalAccel.z / noseDownCos + horizontalLift * noseDownCos
+    end
+
     local blend = 1 - (forceBlend or HELICOPTER_FORCE_BLEND) ^ (deltatime / HELICOPTER_TICK)
-    self.flightLift = Lerp(blend, self.flightLift or 0, goalAccel.z + horizontalLift)
+    self.flightLift = Lerp(blend, self.flightLift or 0, lift)
 
     return goalAccel
 end
@@ -418,7 +430,7 @@ function ENT:PhysicsSimulate(phys, deltatime)
         return self:PhysicsSimulateOverride(Vector(0, 0, 0), Vector(0, 0, 0), phys, deltatime, SIM_NOTHING)
     end
 
-    local goalAccel = self:UpdateFlightLift(delta, velocity, deltatime, handling.forceBlend)
+    local goalAccel = self:UpdateFlightLift(delta, velocity, deltatime, handling.forceBlend, handling.bPitchLift)
     local linearAccel = phys:WorldToLocalVector(self:GetFlightLinearAccel(velocity)) * throttle
     local angularAccel = self:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime, handling) * throttle
 
