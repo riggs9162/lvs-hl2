@@ -12,6 +12,9 @@ local MACHINE_GUN_BURST_TIME = 0.075
 --- Seconds the machine gun pauses after each burst.
 local MACHINE_GUN_BURST_PAUSE_TIME = 2
 
+--- Speed the machine gun tracers fly at.
+local MACHINE_GUN_TRACER_SPEED = 5000
+
 --- Distance the machine gun rounds travel.
 local MACHINE_GUN_RANGE = 56756
 
@@ -107,13 +110,13 @@ function ENT:FireMachineGun()
         Src = muzzle.Pos,
         Dir = muzzle.Ang:Forward(),
         Spread = Vector(spread, spread, 0),
-        Tracer = 1,
-        TracerName = "HelicopterTracer",
+        Tracer = 0,
         AmmoType = "AR2",
         Damage = GetSetting("lvs_car_hl2_combineapc_damage", 3),
         Distance = MACHINE_GUN_RANGE,
         IgnoreEntity = self,
         Callback = function(attacker, trace, dmginfo)
+            self:DrawMachineGunTracer(muzzle.Pos, trace.HitPos)
             self:OnMachineGunHit(trace, dmginfo)
         end,
     })
@@ -125,6 +128,17 @@ function ENT:FireMachineGun()
     util.Effect("ChopperMuzzleFlash", effectData)
 
     self:EmitSound("Weapon_AR2.Single")
+end
+
+--- Draws the original tracer of a machine gun round from the muzzle to where it hit. The engine's own tracer would start at the model's first attachment, which on this model sits in the middle of the hull.
+---@param startPos Vector Position of the muzzle.
+---@param endPos Vector Where the round hit.
+function ENT:DrawMachineGunTracer(startPos, endPos)
+    local effectData = EffectData()
+    effectData:SetStart(startPos)
+    effectData:SetOrigin(endPos)
+    effectData:SetScale(MACHINE_GUN_TRACER_SPEED)
+    util.Effect("HelicopterTracer", effectData)
 end
 
 --- Lets a machine gun round damage vehicles the way LVS guns do and shows the original impact effect.
