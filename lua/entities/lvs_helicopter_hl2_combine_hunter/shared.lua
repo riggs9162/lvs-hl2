@@ -28,9 +28,27 @@ ENT.DisableBallistics = true
 
 ENT.ThrottleRateUp = 0.15
 ENT.ThrottleRateDown = 0.15
-ENT.ThrustRate = 1.0
+ENT.ThrustRate = 2.5
 ENT.TurnRatePitch = 1
 ENT.TurnRateRoll = 0.75
+
+--- Handling for a player at the controls; the autopilot keeps the values of the original helicopter. The speed the goal runs ahead and the rotor force blend are those the original uses while it chases a vehicle, the rest is tuned for a human pilot: it leans further into its movement, turns faster and settles sooner.
+ENT.PilotHandling = {
+    accelRate = 4500,
+    forceBlend = 0.2,
+    pitchScale = 3,
+    rollScale = 3,
+    pitchMin = -40,
+    pitchMax = 45,
+    rollMax = 45,
+    reachTime = 0.35,
+    tiltAccelMax = 700,
+    yawAccelMax = 400,
+    yawRateMax = 150,
+    jerkMax = 4000,
+    aimPitchDeadzone = 2,
+    aimPitchFull = 25,
+}
 
 --- Damage one pulse round deals to everything but players, the original sk_npc_dmg_helicopter.
 ENT.GunDamage = 6
