@@ -111,6 +111,7 @@ end
 
 function ENT:OnSetupDataTables()
     self:AddDT("Bool", "LightsEnabled")
+    self:AddDT("Vector", "GunAimPos")
 end
 
 --- Registers the pulse gun, which charges up and then fires a fixed number of bursts by itself.

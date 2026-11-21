@@ -104,14 +104,13 @@ function ENT:GetGunTarget()
     return target
 end
 
---- Returns the direction from the gun to what the pilot or the autopilot aims at.
----@param basePos Vector Position of the gun mount.
----@return Vector direction
-function ENT:GetGunTargetDirection(basePos)
+--- Returns the point the pilot or the autopilot aims the gun at.
+---@return Vector pos
+function ENT:GetGunTargetPos()
     local target = self:GetGunTarget()
-    if ( target ) then return (target:WorldSpaceCenter() - basePos):GetNormalized() end
+    if ( target ) then return target:WorldSpaceCenter() end
 
-    return (self:GetEyeTrace().HitPos - basePos):GetNormalized()
+    return self:GetEyeTrace().HitPos
 end
 
 --- Turns the gun one step towards a direction, within the limits of its mount.
@@ -330,7 +329,10 @@ function ENT:GunThink(bTrigger)
     local base = self:GetAttachment(self.gunBaseAttachment)
     if ( !base ) then return end
 
-    local targetDir = self:GetGunTargetDirection(base.Pos)
+    local targetPos = self:GetGunTargetPos()
+    local targetDir = (targetPos - base.Pos):GetNormalized()
+
+    self:SetGunAimPos(targetPos)
     self:PoseGunTowardDirection(targetDir)
 
     if ( self.gunState == GUN_STATE_CHARGING and !self:DoGunCharging() ) then return end

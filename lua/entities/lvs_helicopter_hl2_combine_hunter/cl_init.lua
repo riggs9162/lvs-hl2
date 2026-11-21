@@ -65,9 +65,53 @@ local function GetBlinkScale(time)
     return Lerp((step - LIGHT_BLINK_TIME_SHORT) / LIGHT_BLINK_TIME_SHORT, LIGHT_SCALE_ON, LIGHT_SCALE_DIM)
 end
 
+--- Degrees per second the gun turns, twelve on every original think.
+local GUN_TURN_RATE = 120
+
 function ENT:OnFrame()
     self:AnimRotor()
+    self:AnimGun()
     self:AnimTail()
+end
+
+--- Returns the point the gun turns to on this client: the local pilot's own crosshair, or the aim the server reports.
+---@return Vector|nil targetPos
+function ENT:GetClientGunAimPos()
+    if ( self:GetDriver() == LocalPlayer() ) then return self:GetEyeTrace().HitPos end
+
+    local aimPos = self:GetGunAimPos()
+    if ( aimPos:IsZero() ) then return nil end
+
+    return aimPos
+end
+
+--- Turns the gun on every frame as the server does on its think, so that it moves smoothly instead of in the steps of the server's think and the network.
+function ENT:AnimGun()
+    if ( !self.clientGunAngles ) then
+        local pitchMin, pitchMax = self:GetPoseParameterRange(self:LookupPoseParameter("weapon_pitch"))
+        local yawMin, yawMax = self:GetPoseParameterRange(self:LookupPoseParameter("weapon_yaw"))
+
+        self.clientGunAngles = Angle(0, 0, 0)
+        self.clientGunLimits = {pitchMin = -pitchMax, pitchMax = -pitchMin, yawMin = yawMin, yawMax = yawMax}
+    end
+
+    local gunAngles = self.clientGunAngles
+    local targetPos = self:GetClientGunAimPos()
+    local base = self:GetAttachment(self:LookupAttachment("Gun"))
+
+    if ( targetPos and base and self:GetSelectedWeapon() == self.WEAPON_GUN and self:GetHP() > 0 ) then
+        local limits = self.clientGunLimits
+        local step = GUN_TURN_RATE * RealFrameTime()
+        local angles = self:WorldToLocal(self:GetPos() + (targetPos - base.Pos):GetNormalized()):Angle()
+
+        angles:Normalize()
+
+        gunAngles.p = math.Approach(gunAngles.p, math.Clamp(angles.p, limits.pitchMin, limits.pitchMax), step)
+        gunAngles.y = math.Approach(gunAngles.y, math.Clamp(angles.y, limits.yawMin, limits.yawMax), step)
+    end
+
+    self:SetPoseParameter("weapon_pitch", -gunAngles.p)
+    self:SetPoseParameter("weapon_yaw", gunAngles.y)
 end
 
 function ENT:OnRemoved()
