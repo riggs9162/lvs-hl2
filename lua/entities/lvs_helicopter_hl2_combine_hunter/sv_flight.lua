@@ -15,11 +15,8 @@ local HELICOPTER_MIN_DZ_DAMP = -500
 --- Height below the helicopter at which horizontal acceleration is fully dampened.
 local HELICOPTER_MAX_DZ_DAMP = -1000
 
---- Speed the autopilot's goal may run ahead of its current speed, in units per second.
+--- Speed the goal position may run ahead of the current speed, in units per second.
 local CHOPPER_ACCEL_RATE = 500
-
---- Smallest cosine of the nose tilt the rotor force is raised for, which caps the extra force at two and a half times the normal one.
-local PITCH_LIFT_MIN_COS = 0.4
 
 --- Share of the horizontal acceleration that is added to the rotor force.
 local HORIZONTAL_LIFT_FACTOR = 0.1
@@ -30,24 +27,32 @@ local SIDEWAYS_DRAG_RATE = 0.05 / HELICOPTER_TICK
 --- Velocity lost per second in every direction, equal to half a percent per think tick.
 local GENERAL_DRAG_RATE = 0.005 / HELICOPTER_TICK
 
---- Handling of the autopilot, which keeps the values of the original helicopter.
-local HANDLING_AI = {
-    accelRate = CHOPPER_ACCEL_RATE,
-    forceBlend = HELICOPTER_FORCE_BLEND,
-    pitchScale = 0.75,
-    rollScale = 1,
-    pitchMin = -30,
-    pitchMax = 45,
-    rollMax = 45,
-    reachTime = 0.6,
-    tiltAccelMax = 300,
-    yawAccelMax = 120,
-    yawRateMax = 120,
-    jerkMax = 1000,
-}
+--- Share of the tilt towards the goal acceleration that is used as the pitch goal.
+local GOAL_PITCH_SCALE = 0.75
 
---- Highest yaw rate in degrees per second of the uncontrolled spin after losing the tail rotor.
-local YAW_RATE_MAX = HANDLING_AI.yawRateMax
+--- Steepest nose-up pitch goal in degrees.
+local GOAL_PITCH_MIN = -30
+
+--- Steepest nose-down pitch goal in degrees.
+local GOAL_PITCH_MAX = 45
+
+--- Steepest roll goal in degrees.
+local GOAL_ROLL_MAX = 45
+
+--- Time in seconds within which the helicopter tries to reach its goal orientation.
+local ANGULAR_REACH_TIME = 0.6
+
+--- Highest pitch and roll acceleration in degrees per second squared.
+local TILT_ACCEL_MAX = 300
+
+--- Highest yaw acceleration in degrees per second squared.
+local YAW_ACCEL_MAX = 120
+
+--- Highest yaw rate in degrees per second.
+local YAW_RATE_MAX = 120
+
+--- Highest change of angular acceleration per second, simulating mechanical response time.
+local ANGULAR_JERK_MAX = 1000
 
 --- Weakest yaw acceleration of the uncontrolled spin after losing the tail rotor.
 local SPIN_ACCEL_MIN = 50
@@ -73,40 +78,34 @@ local AI_CLIMB_REACH = 400
 --- Horizontal distance below which the autopilot keeps its facing instead of turning to its goal.
 local FACE_GOAL_MIN_DISTANCE = 50
 
---- Share of its full range per second by which a direct input pilot's movement demand follows the steering.
-local DIRECT_DEMAND_RATE = 1.5
+--- View pitch in degrees inside which mouse aim asks for no forward movement.
+local AIM_PITCH_DEADZONE = 5
+
+--- View pitch in degrees at which mouse aim asks for full forward movement.
+local AIM_PITCH_FULL = 45
 
 --- Yaw offset in degrees the helicopter chases while a turn input is held.
 local TURN_LEAD = 60
 
---- Returns the angular acceleration that closes an angle error within the reach time.
----@param difference number Remaining angle to the goal in degrees.
----@param rate number Current angular rate in degrees per second.
----@param reachTime number Seconds within which the error should be closed.
----@param limit number Highest acceleration allowed in degrees per second squared.
----@return number acceleration
-local function SolveAngularAccel(difference, rate, reachTime, limit)
-    local accel = 2 * (difference - rate * reachTime) / (reachTime * reachTime)
-
-    return math.Clamp(accel, -limit, limit)
-end
-
---- Returns the handling the helicopter flies with: the original values for the autopilot, the more responsive ones of the entity's PilotHandling for a player.
----@return table handling
-function ENT:GetFlightHandling()
-    if ( self:GetAI() ) then return HANDLING_AI end
-
-    return self.PilotHandling
-end
-
 --- Converts the pitch of the view into a forward movement demand.
 ---@param pitch number View pitch in degrees, positive looking down.
 ---@return number demand Forward demand between -1 and 1.
-function ENT:PitchToDemand(pitch)
-    local handling = self.PilotHandling
-    local magnitude = math.Clamp(math.Remap(math.abs(pitch), handling.aimPitchDeadzone, handling.aimPitchFull, 0, 1), 0, 1)
+local function PitchToDemand(pitch)
+    local clamped = math.Clamp(pitch, GOAL_PITCH_MIN, GOAL_PITCH_MAX)
+    local magnitude = math.Clamp(math.Remap(math.abs(clamped), AIM_PITCH_DEADZONE, AIM_PITCH_FULL, 0, 1), 0, 1)
 
-    return pitch < 0 and -magnitude or magnitude
+    return clamped < 0 and -magnitude or magnitude
+end
+
+--- Returns the angular acceleration that closes an angle error within the reach time.
+---@param difference number Remaining angle to the goal in degrees.
+---@param rate number Current angular rate in degrees per second.
+---@param limit number Highest acceleration allowed in degrees per second squared.
+---@return number acceleration
+local function SolveAngularAccel(difference, rate, limit)
+    local accel = 2 * (difference - rate * ANGULAR_REACH_TIME) / (ANGULAR_REACH_TIME * ANGULAR_REACH_TIME)
+
+    return math.Clamp(accel, -limit, limit)
 end
 
 --- Turns movement demands into the offset of the position the helicopter tries to reach within one second.
@@ -182,7 +181,7 @@ function ENT:GetFlightGoalMouseAim(client, reach, deltatime)
         eyeAngles = self.StoredEyeAngles
     end
 
-    local forward = self:PitchToDemand(eyeAngles.p)
+    local forward = PitchToDemand(eyeAngles.p)
     local pitchKeys = (client:lvsKeyDown("-PITCH_HELI") and 1 or 0) - (client:lvsKeyDown("+PITCH_HELI") and 1 or 0)
 
     if ( pitchKeys != 0 ) then
@@ -207,29 +206,17 @@ function ENT:GetFlightGoalMouseAim(client, reach, deltatime)
     return self:FlightDemandToDelta(forward, strafe, faceYaw, reach), faceYaw
 end
 
---- Returns the goal of a direct input pilot. The mouse works like a stick that stays where it was pushed: moving it builds up the forward and sideways demand, which holds until it is moved back or the hover key brings the helicopter to a stop.
----@param client Player|nil Pilot of the helicopter.
+--- Returns the goal of a direct input pilot, read from the steering the base already collected.
 ---@param reach number Distance the goal may lie away from the helicopter.
----@param deltatime number Length of the physics step in seconds.
 ---@return Vector delta World space offset to the goal position.
 ---@return number faceYaw Yaw in degrees the helicopter should face.
-function ENT:GetFlightGoalDirect(client, reach, deltatime)
+function ENT:GetFlightGoalDirect(reach)
     local steer = self:GetSteer()
     local yaw = self:GetAngles().y
-    local demand = self.directDemand or Vector(0, 0, 0)
+    local forward = math.Clamp(steer.y, -1, 1)
+    local strafe = math.Clamp(steer.x, -1, 1)
 
-    if ( IsValid(client) and client:lvsKeyDown("HELI_HOVER") ) then
-        demand = Vector(0, 0, 0)
-    else
-        local rate = DIRECT_DEMAND_RATE * deltatime
-
-        demand.x = math.Clamp(demand.x + math.Clamp(steer.y, -1, 1) * rate, -1, 1)
-        demand.y = math.Clamp(demand.y + math.Clamp(steer.x, -1, 1) * rate, -1, 1)
-    end
-
-    self.directDemand = demand
-
-    return self:FlightDemandToDelta(demand.x, demand.y, yaw, reach), yaw + math.Clamp(steer.z, -1, 1) * TURN_LEAD
+    return self:FlightDemandToDelta(forward, strafe, yaw, reach), yaw + math.Clamp(steer.z, -1, 1) * TURN_LEAD
 end
 
 --- Returns where the helicopter currently wants to go and which way it wants to face.
@@ -243,17 +230,15 @@ function ENT:GetFlightGoal(reach, deltatime)
     local client = self:GetDriver()
     if ( IsValid(client) and client:lvsMouseAim() ) then return self:GetFlightGoalMouseAim(client, reach, deltatime) end
 
-    return self:GetFlightGoalDirect(client, reach, deltatime)
+    return self:GetFlightGoalDirect(reach)
 end
 
 --- Computes the acceleration needed to reach the goal within one second and blends the rotor force towards it.
 ---@param delta Vector World space offset to the goal position.
 ---@param velocity Vector Current world space velocity.
 ---@param deltatime number Length of the physics step in seconds.
----@param forceBlend number|nil Share of the previous rotor force kept per original think tick.
----@param bPitchLift boolean|nil Whether to raise the rotor force by as much as the nose is tilted down, so that the helicopter holds its height in a steep forward lean instead of sinking; the original's own allowance for leaning shrinks by the same amount so the two do not add up.
 ---@return Vector goalAccel Acceleration the helicopter leans into, gravity compensation included.
-function ENT:UpdateFlightLift(delta, velocity, deltatime, forceBlend, bPitchLift)
+function ENT:UpdateFlightLift(delta, velocity, deltatime)
     local goalAccel = (delta - velocity) * 2
     goalAccel.z = math.Clamp(goalAccel.z + HELICOPTER_GRAVITY, HELICOPTER_GRAVITY * 0.2, HELICOPTER_GRAVITY * 2)
 
@@ -273,16 +258,8 @@ function ENT:UpdateFlightLift(delta, velocity, deltatime, forceBlend, bPitchLift
         end
     end
 
-    local lift = goalAccel.z + horizontalLift
-
-    if ( bPitchLift ) then
-        local noseDownCos = math.max(math.cos(math.rad(math.max(self:GetAngles().p, 0))), PITCH_LIFT_MIN_COS)
-
-        lift = goalAccel.z / noseDownCos + horizontalLift * noseDownCos
-    end
-
-    local blend = 1 - (forceBlend or HELICOPTER_FORCE_BLEND) ^ (deltatime / HELICOPTER_TICK)
-    self.flightLift = Lerp(blend, self.flightLift or 0, lift)
+    local blend = 1 - HELICOPTER_FORCE_BLEND ^ (deltatime / HELICOPTER_TICK)
+    self.flightLift = Lerp(blend, self.flightLift or 0, goalAccel.z + horizontalLift)
 
     return goalAccel
 end
@@ -302,21 +279,20 @@ function ENT:GetFlightLinearAccel(velocity)
     return accel
 end
 
---- Returns the local angular acceleration that leans the helicopter into its goal acceleration and turns it to its facing. The tilt goal is measured from the current attitude, so a scale of s settles at s / (1 + s) of the tilt the goal acceleration asks for: the original 0.75 leans the nose only three sevenths of the way. A recent blast adds its roll offset to the roll goal before the conversion to degrees, exactly as the original does, which pins the helicopter at its steepest roll until the offset has worn off.
+--- Returns the local angular acceleration that leans the helicopter into its goal acceleration and turns it to its facing. A recent blast adds its roll offset to the roll goal before the conversion to degrees, exactly as the original does, which pins the helicopter at its steepest roll until the offset has worn off.
 ---@param phys PhysObj Physics object of the helicopter.
 ---@param goalAccel Vector Acceleration the helicopter leans into.
 ---@param faceYaw number Yaw in degrees the helicopter should face.
 ---@param deltatime number Length of the physics step in seconds.
----@param handling table Handling values to fly with.
 ---@return Vector accel Angular acceleration around the local roll, pitch and yaw axes in degrees per second squared.
-function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime, handling)
+function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime)
     local angles = self:GetAngles()
     local goalUp = goalAccel:GetNormalized()
-    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * handling.pitchScale
-    local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)) + (self.flightRollDamage or 0)) * handling.rollScale
+    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * GOAL_PITCH_SCALE
+    local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)) + (self.flightRollDamage or 0))
 
-    goalPitch = math.Clamp(goalPitch, handling.pitchMin, handling.pitchMax)
-    goalRoll = math.Clamp(goalRoll, -handling.rollMax, handling.rollMax)
+    goalPitch = math.Clamp(goalPitch, GOAL_PITCH_MIN, GOAL_PITCH_MAX)
+    goalRoll = math.Clamp(goalRoll, -GOAL_ROLL_MAX, GOAL_ROLL_MAX)
 
     local sinPitch = math.sin(math.rad(angles.p))
     local cosPitch = math.max(math.cos(math.rad(angles.p)), 0.1)
@@ -328,26 +304,23 @@ function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime, handling
     local yawRate = (angVelocity.y * sinRoll + angVelocity.z * cosRoll) / cosPitch
     local rollRate = angVelocity.x + yawRate * sinPitch
 
-    local reachTime = handling.reachTime
-    local goalPitchAccel = SolveAngularAccel(math.AngleDifference(goalPitch, angles.p), pitchRate, reachTime, handling.tiltAccelMax)
-    local goalYawAccel = SolveAngularAccel(math.AngleDifference(faceYaw, angles.y), yawRate, reachTime, handling.yawAccelMax)
-    local goalRollAccel = SolveAngularAccel(math.AngleDifference(goalRoll, angles.r), rollRate, reachTime, handling.tiltAccelMax)
+    local goalPitchAccel = SolveAngularAccel(math.AngleDifference(goalPitch, angles.p), pitchRate, TILT_ACCEL_MAX)
+    local goalYawAccel = SolveAngularAccel(math.AngleDifference(faceYaw, angles.y), yawRate, YAW_ACCEL_MAX)
+    local goalRollAccel = SolveAngularAccel(math.AngleDifference(goalRoll, angles.r), rollRate, TILT_ACCEL_MAX)
 
     if ( self:IsSteeringDestroyed() ) then
         goalYawAccel = math.Rand(SPIN_ACCEL_MIN, SPIN_ACCEL_MAX) * self:Sign(self._SteerOverrideMove or 1)
     end
 
     local current = self.flightAngAccel or Vector(0, 0, 0)
-    local jerk = handling.jerkMax * deltatime
+    local jerk = ANGULAR_JERK_MAX * deltatime
     local pitchAccel = math.Approach(current.x, goalPitchAccel, jerk)
     local yawAccel = math.Approach(current.y, goalYawAccel, jerk)
     local rollAccel = math.Approach(current.z, goalRollAccel, jerk)
 
     self.flightAngAccel = Vector(pitchAccel, yawAccel, rollAccel)
 
-    local yawRateMax = handling.yawRateMax
-
-    yawAccel = math.Clamp(yawAccel, (-yawRateMax - yawRate) / deltatime, (yawRateMax - yawRate) / deltatime)
+    yawAccel = math.Clamp(yawAccel, (-YAW_RATE_MAX - yawRate) / deltatime, (YAW_RATE_MAX - yawRate) / deltatime)
 
     return Vector(
         rollAccel - yawAccel * sinPitch,
@@ -401,7 +374,7 @@ function ENT:SimulateDyingFlight(phys, velocity, deltatime)
     return self:PhysicsSimulateOverride(angularAccel, phys:WorldToLocalVector(linearAccel), phys, deltatime, SIM_LOCAL_ACCELERATION)
 end
 
---- Flies the helicopter with the Half-Life 2 attack helicopter model instead of the LVS helicopter physics, with the original handling for the autopilot and a quicker one for a player.
+--- Flies the helicopter with the Half-Life 2 attack helicopter model instead of the LVS helicopter physics.
 ---@param phys PhysObj Physics object of the helicopter.
 ---@param deltatime number Length of the physics step in seconds.
 ---@return Vector angularAccel Local angular acceleration.
@@ -417,22 +390,20 @@ function ENT:PhysicsSimulate(phys, deltatime)
 
     self.flightRollDamage = math.Approach(self.flightRollDamage or 0, 0, ROLL_DAMAGE_DECAY * deltatime)
 
-    local handling = self:GetFlightHandling()
-    local reach = math.min(velocity:Length() + handling.accelRate, self.MaxVelocity)
+    local reach = math.min(velocity:Length() + CHOPPER_ACCEL_RATE, self.MaxVelocity)
     local delta, faceYaw = self:GetFlightGoal(reach, deltatime)
     local throttle = self:GetThrottle()
 
     if ( throttle <= 0 or ( self:GetThrust() <= 0 and self:HitGround() ) ) then
         self.flightLift = 0
         self.flightAngAccel = nil
-        self.directDemand = nil
 
         return self:PhysicsSimulateOverride(Vector(0, 0, 0), Vector(0, 0, 0), phys, deltatime, SIM_NOTHING)
     end
 
-    local goalAccel = self:UpdateFlightLift(delta, velocity, deltatime, handling.forceBlend, handling.bPitchLift)
+    local goalAccel = self:UpdateFlightLift(delta, velocity, deltatime)
     local linearAccel = phys:WorldToLocalVector(self:GetFlightLinearAccel(velocity)) * throttle
-    local angularAccel = self:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime, handling) * throttle
+    local angularAccel = self:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime) * throttle
 
     return self:PhysicsSimulateOverride(angularAccel, linearAccel, phys, deltatime, SIM_LOCAL_ACCELERATION)
 end
