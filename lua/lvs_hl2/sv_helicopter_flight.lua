@@ -1,4 +1,4 @@
---- Flight model for the hunter-chopper, ported from ComputeVelocity and ComputeAngularVelocity of the Half-Life 2 attack helicopter (npc_attackchopper.cpp) and the drag helpers of its base class (cbasehelicopter.cpp).
+--- Flight model of the Half-Life 2 helicopters, ported from ComputeVelocity and ComputeAngularVelocity of the attack helicopter (npc_attackchopper.cpp), the drag helpers of their base class (cbasehelicopter.cpp) and the Flight of the gunship (npc_combinegunship.cpp), which differ only in the numbers below. The defaults are those of the attack helicopter; a helicopter that flies differently sets the ENT fields FlightGoalPitchScale, FlightGoalPitchMin, FlightGoalPitchMax, FlightSidewaysDrag and bFlightHeightDampening, and may set flightGeneralDrag while it has to stop quickly.
 
 --- Gravity the original helicopter flies under, in units per second squared.
 local HELICOPTER_GRAVITY = 384
@@ -21,11 +21,11 @@ local CHOPPER_ACCEL_RATE = 500
 --- Share of the horizontal acceleration that is added to the rotor force.
 local HORIZONTAL_LIFT_FACTOR = 0.1
 
---- Velocity lost per second along the sideways axis, equal to five percent per think tick.
-local SIDEWAYS_DRAG_RATE = 0.05 / HELICOPTER_TICK
+--- Share of the velocity along the sideways axis lost per think tick.
+local SIDEWAYS_DRAG = 0.05
 
---- Velocity lost per second in every direction, equal to half a percent per think tick.
-local GENERAL_DRAG_RATE = 0.005 / HELICOPTER_TICK
+--- Share of the velocity in every direction lost per think tick.
+local GENERAL_DRAG = 0.005
 
 --- Share of the tilt towards the goal acceleration that is used as the pitch goal.
 local GOAL_PITCH_SCALE = 0.75
@@ -89,6 +89,9 @@ local AI_CLIMB_REACH = 400
 
 --- Horizontal distance below which the autopilot keeps its facing instead of turning to its goal.
 local FACE_GOAL_MIN_DISTANCE = 50
+
+--- Horizontal distance to its enemy below which the autopilot keeps its facing, since the way to an enemy right below it points nowhere in particular.
+local FACE_ENEMY_MIN_DISTANCE = 200
 
 --- View pitch in degrees inside which mouse aim asks for no forward movement.
 local AIM_PITCH_DEADZONE = 5
@@ -162,13 +165,17 @@ function ENT:GetFlightGoalAI(reach)
 
     delta:Add(self:GetAIAvoidance())
 
-    local enemy = self:AIGetTarget()
+    local enemy = self.GetAIFaceTarget and self:GetAIFaceTarget() or self:AIGetTarget()
     local bFarFromGoal = delta:Length2DSqr() > FACE_GOAL_MIN_DISTANCE * FACE_GOAL_MIN_DISTANCE
 
     if ( self.bAIFaceTravel and bFarFromGoal ) then
         faceYaw = delta:Angle().y
     elseif ( IsValid(enemy) ) then
-        faceYaw = (enemy:GetPos() - pos):Angle().y
+        local toEnemy = enemy:GetPos() - pos
+
+        if ( toEnemy:Length2DSqr() > FACE_ENEMY_MIN_DISTANCE * FACE_ENEMY_MIN_DISTANCE ) then
+            faceYaw = toEnemy:Angle().y
+        end
     elseif ( bFarFromGoal ) then
         faceYaw = delta:Angle().y
     end
@@ -256,8 +263,9 @@ function ENT:UpdateFlightLift(delta, velocity, deltatime, bPitchLift)
     goalAccel.z = math.Clamp(goalAccel.z + HELICOPTER_GRAVITY, HELICOPTER_GRAVITY * 0.2, HELICOPTER_GRAVITY * 2)
 
     local horizontalLift = (math.abs(goalAccel.x) + math.abs(goalAccel.y)) * HORIZONTAL_LIFT_FACTOR
+    local bHeightDampening = self.bFlightHeightDampening != false
 
-    if ( delta.z < HELICOPTER_MIN_DZ_DAMP and horizontalLift > 0 ) then
+    if ( bHeightDampening and delta.z < HELICOPTER_MIN_DZ_DAMP and horizontalLift > 0 ) then
         local fraction = math.Clamp((HELICOPTER_MIN_DZ_DAMP - delta.z) / (HELICOPTER_MIN_DZ_DAMP - HELICOPTER_MAX_DZ_DAMP), 0, 1)
         local spline = fraction * fraction * (3 - 2 * fraction)
         local dampedLift = Lerp(spline, horizontalLift, 2.5 * HELICOPTER_GRAVITY * 0.2)
@@ -283,17 +291,30 @@ function ENT:UpdateFlightLift(delta, velocity, deltatime, bPitchLift)
     return goalAccel
 end
 
+--- Returns the velocity lost per second to both drag terms, the sideways drag weighted by how far the sideways axis points along each world axis.
+---@param velocity Vector Current world space velocity.
+---@param sidewaysDrag Vector Share of the velocity along each world axis lost per think tick to sideways drag at full alignment.
+---@return Vector drag
+function ENT:GetFlightDrag(velocity, sidewaysDrag)
+    local right = self:GetRight()
+    local generalDrag = self.flightGeneralDrag or GENERAL_DRAG
+
+    return Vector(
+        velocity.x * (math.abs(right.x) * sidewaysDrag.x + generalDrag) / HELICOPTER_TICK,
+        velocity.y * (math.abs(right.y) * sidewaysDrag.y + generalDrag) / HELICOPTER_TICK,
+        velocity.z * (math.abs(right.z) * sidewaysDrag.z + generalDrag) / HELICOPTER_TICK
+    )
+end
+
 --- Returns the world space acceleration from the rotor, the original gravity and both drag terms.
 ---@param velocity Vector Current world space velocity.
 ---@return Vector accel
 function ENT:GetFlightLinearAccel(velocity)
-    local right = self:GetRight()
+    local sidewaysDrag = self.FlightSidewaysDrag or SIDEWAYS_DRAG
     local accel = self:GetUp() * (self.flightLift or 0)
 
     accel.z = accel.z + self:GetWorldGravity() - HELICOPTER_GRAVITY
-    accel.x = accel.x - velocity.x * (math.abs(right.x) * SIDEWAYS_DRAG_RATE + GENERAL_DRAG_RATE)
-    accel.y = accel.y - velocity.y * (math.abs(right.y) * SIDEWAYS_DRAG_RATE + GENERAL_DRAG_RATE)
-    accel.z = accel.z - velocity.z * (math.abs(right.z) * SIDEWAYS_DRAG_RATE + GENERAL_DRAG_RATE)
+    accel:Sub(self:GetFlightDrag(velocity, Vector(sidewaysDrag, sidewaysDrag, sidewaysDrag)))
 
     return accel
 end
@@ -308,17 +329,18 @@ function ENT:GetFlightAngularAccel(phys, goalAccel, faceYaw, deltatime)
     local angles = self:GetAngles()
     local goalUp = goalAccel:GetNormalized()
     local bPilot = !self:GetAI()
-    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * GOAL_PITCH_SCALE
+    local pitchMin = self.FlightGoalPitchMin or GOAL_PITCH_MIN
+    local goalPitch = math.deg(math.asin(math.Clamp(self:GetForward():Dot(goalUp), -1, 1))) * (self.FlightGoalPitchScale or GOAL_PITCH_SCALE)
 
     local goalRoll = math.deg(math.asin(math.Clamp(self:GetRight():Dot(goalUp), -1, 1)) + (self.flightRollDamage or 0))
 
-    goalPitch = math.Clamp(goalPitch, GOAL_PITCH_MIN, GOAL_PITCH_MAX)
+    goalPitch = math.Clamp(goalPitch, pitchMin, self.FlightGoalPitchMax or GOAL_PITCH_MAX)
 
     if ( bPilot ) then
         local flatForward = Angle(0, angles.y, 0):Forward()
         local wantedPitch = math.deg(math.atan2(goalAccel:Dot(flatForward), goalAccel.z)) * PILOT_GOAL_PITCH_SHARE
 
-        wantedPitch = math.Clamp(wantedPitch, GOAL_PITCH_MIN, PILOT_GOAL_PITCH_MAX)
+        wantedPitch = math.Clamp(wantedPitch, pitchMin, PILOT_GOAL_PITCH_MAX)
         goalPitch = math.Approach(self.flightPilotPitch or angles.p, wantedPitch, PILOT_PITCH_SLEW * deltatime)
         self.flightPilotPitch = goalPitch
     end

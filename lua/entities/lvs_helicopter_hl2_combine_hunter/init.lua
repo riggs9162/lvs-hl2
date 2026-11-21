@@ -1,11 +1,12 @@
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
-include("sv_flight.lua")
+include("lvs_hl2/sv_helicopter_flight.lua")
 include("sv_gun.lua")
 include("sv_bombs.lua")
 include("sv_wash.lua")
 include("sv_damage.lua")
+include("lvs_hl2/sv_helicopter_ai.lua")
 include("sv_ai.lua")
 
 --- Position of the pilot's seat.
