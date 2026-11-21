@@ -1,108 +1,66 @@
 include("shared.lua")
+include("cl_sounds.lua")
 
-function ENT:PreDraw()
-	local Body = self:GetBody()
-	if not IsValid(Body) then return false end
-	Body:DrawModel()
-	self:DrawModel()
+--- Push of the rotor at which the body is bent all the way, in the original's units per think.
+local FIN_FULL_FORCE = 60
+
+--- Share of its full bend the body moves per second, a tenth on every original think.
+local FIN_RATE = 1
+
+--- Downward push of gravity per original think.
+local GRAVITY_PER_TICK = 38.4
+
+--- Eases a value into the range of -1 to 1 along an S-curve, from SimpleSplineRemapVal with a range of -FIN_FULL_FORCE to FIN_FULL_FORCE.
+---@param value number
+---@return number blend
+local function FinBlend(value)
+    local fraction = math.Clamp((value + FIN_FULL_FORCE) / (2 * FIN_FULL_FORCE), 0, 1)
+
+    return -1 + 2 * fraction * fraction * (3 - 2 * fraction)
 end
 
-ENT.LightMaterial = Material("effects/lvs/heli_spotlight")
-ENT.GlowMaterial = Material("sprites/light_glow02_add")
-function ENT:PreDrawTranslucent()
-	if not self:GetLightsEnabled() then
-		self:RemoveLight()
-		return false
-	end
+--- Bends the body with how hard the rotor pushes along and across the dropship's movement, and tucks in its back end while it lands, on every frame, from the end of CNPC_CombineDropship::Flight.
+function ENT:AnimBody()
+    local deltatime = RealFrameTime()
+    local force = self:GetRotorForce()
+    local impulse = self:GetUp() * force
 
-	local SpotLight = self:GetAttachment(self:LookupAttachment("Gun_Ref"))
-	if not SpotLight then return end
-	if not IsValid(self.projector) then
-		local thelamp = ProjectedTexture()
-		thelamp:SetBrightness(5)
-		thelamp:SetTexture("effects/flashlight/soft")
-		thelamp:SetColor(Color(255, 255, 255))
-		thelamp:SetEnableShadows(true)
-		thelamp:SetFarZ(2500)
-		thelamp:SetNearZ(75)
-		thelamp:SetFOV(75)
-		self.projector = thelamp
-	end
+    impulse.z = impulse.z - GRAVITY_PER_TICK
 
-	local forward = SpotLight.Ang:Forward()
-	local right = SpotLight.Ang:Right()
-	local up = SpotLight.Ang:Up()
-	render.SetMaterial(self.GlowMaterial)
-	render.DrawSprite(SpotLight.Pos - forward * 9 - right * 5 - up * 7.5, 32, 32, Color(255, 255, 255, 255))
-	render.SetMaterial(self.LightMaterial)
-	render.DrawBeam(SpotLight.Pos - forward * 9 - right * 5 - up * 7.5, SpotLight.Pos + forward * 64 - right * 5 - up * 7.5, 32, 0, 0.99, Color(100, 100, 100, 255))
-	if IsValid(self.projector) then
-		self.projector:SetPos(SpotLight.Pos - forward * 9 - right * 5 - up * 7.5)
-		self.projector:SetAngles(SpotLight.Ang)
-		self.projector:Update()
-	end
-	return false
-end
+    local accelDir = impulse:GetNormalized()
+    local velocityDir = self:GetVelocity():GetNormalized()
+    local right = self:GetRight()
 
-function ENT:OnRemoved()
-	self:RemoveLight()
-end
+    accelDir.z = 0
+    velocityDir.z = 0
+    right.z = 0
 
-function ENT:DamageFX()
-	self.nextDFX = self.nextDFX or 0
-	if self.nextDFX < CurTime() then
-		self.nextDFX = CurTime() + 0.05
-		local HP = self:GetHP()
-		local MaxHP = self:GetMaxHP()
-		if HP > MaxHP * 0.25 then return end
-		local effectdata = EffectData()
-		effectdata:SetOrigin(self:LocalToWorld(Vector(-60, 0, -10)))
-		effectdata:SetNormal(self:GetUp())
-		effectdata:SetMagnitude(math.Rand(0.5, 1.5))
-		effectdata:SetEntity(self)
-		util.Effect("lvs_exhaust_fire", effectdata)
-	end
+    local finSpeed = force * velocityDir:Dot(accelDir)
+    local swaySpeed = force * velocityDir:Dot(right)
+
+    if ( self:GetDeploying() ) then
+        finSpeed = -FIN_FULL_FORCE
+    end
+
+    self.bodyAccel = math.Approach(self.bodyAccel or 0, FinBlend(finSpeed), FIN_RATE * deltatime)
+    self.bodySway = math.Approach(self.bodySway or 0, FinBlend(swaySpeed), FIN_RATE * deltatime)
+
+    local bCargo = IsValid(self:GetCargo())
+    local accelPose = bCargo and "cargo_body_accel" or "body_accel"
+    local swayPose = bCargo and "cargo_body_sway" or "body_sway"
+
+    self:SetPoseParameter(bCargo and "body_accel" or "cargo_body_accel", 0)
+    self:SetPoseParameter(bCargo and "body_sway" or "cargo_body_sway", 0)
+    self:SetPoseParameter(accelPose, self.bodyAccel)
+    self:SetPoseParameter(swayPose, self.bodySway)
+    self:InvalidateBoneCache()
 end
 
 function ENT:OnFrame()
-	self:DamageFX()
+    self:AnimBody()
+    self:UpdateDropshipSounds()
 end
 
-function ENT:RemoveLight()
-	if IsValid(self.projector) then
-		self.projector:Remove()
-		self.projector = nil
-	end
-end
-
-function ENT:PaintCrosshairSquare(Pos2D, Col)
-	local X = Pos2D.x + 1
-	local Y = Pos2D.y + 1
-	local Size = 20
-	surface.SetDrawColor(0, 0, 0, 80)
-	surface.DrawLine(X - Size, Y + Size, X - Size * 0.5, Y + Size)
-	surface.DrawLine(X + Size, Y + Size, X + Size * 0.5, Y + Size)
-	surface.DrawLine(X - Size, Y + Size, X - Size, Y + Size * 0.5)
-	surface.DrawLine(X - Size, Y - Size, X - Size, Y - Size * 0.5)
-	surface.DrawLine(X + Size, Y + Size, X + Size, Y + Size * 0.5)
-	surface.DrawLine(X + Size, Y - Size, X + Size, Y - Size * 0.5)
-	surface.DrawLine(X - Size, Y - Size, X - Size * 0.5, Y - Size)
-	surface.DrawLine(X + Size, Y - Size, X + Size * 0.5, Y - Size)
-	if Col then
-		surface.SetDrawColor(Col.r, Col.g, Col.b, Col.a)
-	else
-		surface.SetDrawColor(255, 255, 255, 255)
-	end
-
-	X = Pos2D.x
-	Y = Pos2D.y
-	surface.DrawLine(X - Size, Y + Size, X - Size * 0.5, Y + Size)
-	surface.DrawLine(X + Size, Y + Size, X + Size * 0.5, Y + Size)
-	surface.DrawLine(X - Size, Y + Size, X - Size, Y + Size * 0.5)
-	surface.DrawLine(X - Size, Y - Size, X - Size, Y - Size * 0.5)
-	surface.DrawLine(X + Size, Y + Size, X + Size, Y + Size * 0.5)
-	surface.DrawLine(X + Size, Y - Size, X + Size, Y - Size * 0.5)
-	surface.DrawLine(X - Size, Y - Size, X - Size * 0.5, Y - Size)
-	surface.DrawLine(X + Size, Y - Size, X + Size * 0.5, Y - Size)
-	self:PaintCrosshairCenter(Pos2D, Col)
+function ENT:OnRemoved()
+    self:StopDropshipSounds()
 end
