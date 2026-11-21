@@ -45,7 +45,7 @@ local PILOT_GOAL_PITCH_SCALE = 6
 --- Steepest nose-down pitch goal in degrees while a player flies.
 local PILOT_GOAL_PITCH_MAX = 60
 
---- Smallest cosine of the nose-down tilt the rotor force is raised for, which caps the extra force at two and a half times the normal one.
+--- Smallest cosine of the lean the rotor force is raised for, which caps the extra force at two and a half times the normal one.
 local PITCH_LIFT_MIN_COS = 0.4
 
 --- Time in seconds within which the helicopter tries to reach its goal orientation.
@@ -246,7 +246,7 @@ end
 ---@param delta Vector World space offset to the goal position.
 ---@param velocity Vector Current world space velocity.
 ---@param deltatime number Length of the physics step in seconds.
----@param bPitchLift boolean|nil Whether to raise the rotor force by as much as the nose is tilted down, so that the helicopter holds its height in a steep forward lean instead of sinking; the original's own allowance for leaning shrinks by the same amount so the two do not add up.
+---@param bPitchLift boolean|nil Whether to raise the rotor force by exactly as much as the helicopter leans, so that it holds its height while it speeds up, brakes or strafes instead of rising and sinking. This replaces the original's rough allowance for leaning, which adds lift from the wanted acceleration rather than the actual lean and makes the helicopter climb whenever it brakes.
 ---@return Vector goalAccel Acceleration the helicopter leans into, gravity compensation included.
 function ENT:UpdateFlightLift(delta, velocity, deltatime, bPitchLift)
     local goalAccel = (delta - velocity) * 2
@@ -272,9 +272,7 @@ function ENT:UpdateFlightLift(delta, velocity, deltatime, bPitchLift)
     local lift = goalAccel.z + horizontalLift
 
     if ( bPitchLift ) then
-        local noseDownCos = math.max(math.cos(math.rad(math.max(self:GetAngles().p, 0))), PITCH_LIFT_MIN_COS)
-
-        lift = goalAccel.z / noseDownCos + horizontalLift * noseDownCos
+        lift = goalAccel.z / math.max(self:GetUp().z, PITCH_LIFT_MIN_COS)
     end
 
     self.flightLift = Lerp(blend, self.flightLift or 0, lift)
