@@ -1,4 +1,4 @@
---- Cargo of the dropship, from the pickup, carry and drop code of npc_combinedropship.cpp (InputPickup, the swooping landing state, DropSoldierContainer, InputDropStrider and InputDropAPC). Physical cargo is welded on, loses its weight and is moved along with the dropship on every tick while it hangs underneath, much as the original holds it with a physics shadow, so that the dropship flies the same with or without it; NPCs are parented and frozen, as the original parents them.
+--- Cargo of the dropship, from the pickup, carry and drop code of npc_combinedropship.cpp (InputPickup, the swooping landing state, DropSoldierContainer, InputDropStrider and InputDropAPC). Cargo of this addon is held to its place by a physics shadow as in the original (lvs_hl2/sv_dropship_cargo.lua), so that the dropship flies as if it weighed nothing; any other physical cargo is welded on, loses its weight and is moved along with the dropship on every tick; NPCs are parented and frozen, as the original parents them.
 
 --- Farthest the cargo may be from where it would hang for the grabber to latch on to it.
 local PICKUP_REACH = 300
@@ -115,12 +115,12 @@ local function MoveParts(parts, root, pos, angles, velocity)
     end
 end
 
---- Latches on to a cargo: NPCs are parented and frozen in their carried pose, everything else is welded on, loses its weight and is moved along with the dropship.
+--- Latches on to a cargo: NPCs are parented and frozen in their carried pose, cargo that supports it is held by a physics shadow, and everything else is welded on, loses its weight and is moved along with the dropship.
 ---@param ent Entity
 ---@param bDefault boolean|nil Whether the dropship spawned with it, which removes it together with the dropship while it is carried.
 function ENT:GrabCargo(ent, bDefault)
     local config = self:GetCargoConfig(ent)
-    if ( !config or IsValid(self.cargo) ) then return end
+    if ( !config or self.cargo ) then return end
 
     local localAngles = self:GetCargoLocalAngles(ent, config)
     local data = {ent = ent, config = config, bDefault = bDefault}
@@ -164,7 +164,12 @@ function ENT:GrabCargo(ent, bDefault)
             phys:EnableGravity(false)
         end
 
-        data.weld = constraint.Weld(self, ent, 0, 0, 0, true, false)
+        if ( ent.bHL2DropshipShadowCargo ) then
+            data.bShadow = true
+            ent:SetHL2DropshipCarry(self, config.offset, localAngles)
+        else
+            data.weld = constraint.Weld(self, ent, 0, 0, 0, true, false)
+        end
     end
 
     ent.hl2DropshipCarrier = self
@@ -227,7 +232,11 @@ function ENT:ReleaseCargo()
         return
     end
 
-    SafeRemoveEntity(data.weld)
+    if ( data.bShadow ) then
+        ent:SetHL2DropshipCarry(nil)
+    else
+        SafeRemoveEntity(data.weld)
+    end
 
     local velocity = self:GetVelocity()
     velocity.z = math.min(velocity.z, 0)
@@ -258,7 +267,7 @@ end
 --- Moves every part of a welded cargo along with the dropship, as if it were part of it, so that its weight and inertia do not drag on the dropship's flight.
 function ENT:FollowCargo()
     local data = self.cargo
-    if ( !data or !data.parts ) then return end
+    if ( !data or !data.parts or data.bShadow ) then return end
 
     local selfPhys = self:GetPhysicsObject()
     if ( !IsValid(selfPhys) ) then return end

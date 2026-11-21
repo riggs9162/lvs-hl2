@@ -3,6 +3,9 @@ AddCSLuaFile("cl_sounds.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
 include("sv_damage.lua")
+include("lvs_hl2/sv_dropship_cargo.lua")
+
+DEFINE_BASECLASS("lvs_base_wheeldrive")
 
 --- Radius of the wheels, from the Half-Life 2 vehicle script (scripts/vehicles/apc.txt).
 local WHEEL_RADIUS = 28
@@ -88,6 +91,19 @@ function ENT:OnSpawn(PObj)
     self:SetHP(var)
 
     if ( self.PostOnSpawn ) then self:PostOnSpawn(PObj) end
+end
+
+--- Holds the APC to its place while a dropship carries it, and otherwise drives it as any LVS vehicle.
+---@param phys PhysObj
+---@param deltatime number
+function ENT:PhysicsSimulate(phys, deltatime)
+    if ( phys:GetEntity() == self ) then
+        local angularAccel, linearAccel, simulate = self:SimulateHL2DropshipCarry(phys, deltatime)
+
+        if ( simulate ) then return angularAccel, linearAccel, simulate end
+    end
+
+    return BaseClass.PhysicsSimulate(self, phys, deltatime)
 end
 
 function ENT:OnDriverEnterVehicle(client)

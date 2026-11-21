@@ -3,6 +3,7 @@ AddCSLuaFile("cl_init.lua")
 include("shared.lua")
 include("sv_gun.lua")
 include("sv_damage.lua")
+include("lvs_hl2/sv_dropship_cargo.lua")
 
 --- Seconds between two thinks of the gun and the door, the original's think interval.
 local THINK_INTERVAL = 0.1
@@ -130,6 +131,13 @@ function ENT:UpdateDoorSequence()
     if ( self:GetSequence() == idle or !self:IsSequenceFinished() ) then return end
 
     self:ResetSequence(idle)
+end
+
+--- Holds the container to its place while a dropship carries it.
+---@param phys PhysObj
+---@param deltatime number
+function ENT:PhysicsSimulate(phys, deltatime)
+    return self:SimulateHL2DropshipCarry(phys, deltatime)
 end
 
 function ENT:OnTick()
