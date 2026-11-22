@@ -9,6 +9,13 @@ CreateConVar("lvs_car_hl2_combineapc_spread", 0.06976, nil, "Controls the spread
 
 CreateConVar("lvs_car_hl2_combinetransport_health", 1800, nil, "Controls the health of the Combine Transport.")
 
+CreateConVar("lvs_car_hl2_combineifv_damage", 35, nil, "Controls the damage of the pulse gun from the Combine IFV.")
+CreateConVar("lvs_car_hl2_combineifv_rocketdamage", 250, nil, "Controls the damage of the guided missiles from the Combine IFV.")
+CreateConVar("lvs_car_hl2_combineifv_rocketradius", 250, nil, "Controls the splash radius of the guided missiles from the Combine IFV.")
+CreateConVar("lvs_car_hl2_combineifv_rocketspeed", 1500, nil, "Controls the speed of the guided missiles from the Combine IFV.")
+CreateConVar("lvs_car_hl2_combineifv_health", 2000, nil, "Controls the health of the Combine IFV.")
+CreateConVar("lvs_car_hl2_combineifv_spread", 0.015, nil, "Controls the spread of the pulse gun from the Combine IFV.")
+
 CreateConVar("lvs_car_hl2_combinebrickade_health", 2500, nil, "Controls the health of the Combine Brickade.")
 
 --- Reports once the map has loaded whether the LVS base is installed, since none of the vehicles work without it.
