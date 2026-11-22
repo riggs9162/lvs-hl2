@@ -56,7 +56,7 @@ function ENT:RunAIWander()
     local spot = self.aiWanderSpot
 
     if ( !spot or now > self.aiNextWanderTurn or spot:Distance2D(pos) < AI_WANDER_REACHED ) then
-        spot = self:FindWanderSpot() or pos + Angle(0, self:GetAngles().y + math.Rand(-90, 90), 0):Forward() * 2000
+        spot = self:FindNavWanderSpot() or pos + Angle(0, self:GetAngles().y + math.Rand(-90, 90), 0):Forward() * 2000
         self.aiWanderSpot = spot
         self.aiNextWanderTurn = now + math.Rand(AI_WANDER_TIME_MIN, AI_WANDER_TIME_MAX)
         self:ClearNavRoute()
