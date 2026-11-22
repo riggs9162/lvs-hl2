@@ -185,17 +185,27 @@ function ENT:OnFrame()
     self:AnimateStrider()
 end
 
---- Looks out of the strider's eyes in first person, and from behind it in third person as any LVS walker.
+--- Rides on the minigun in first person, looking down its barrel from just above it.
+---@param ply Player
+---@param pos Vector
+---@param fov number
+---@return table view
+function ENT:CalcViewFirstPerson(ply, pos, fov)
+    local angles = ply:EyeAngles()
+    local base = self:GetStriderAttachment("MiniGunBase")
+
+    return {
+        origin = base and self:GetMinigunViewPos(base.Pos, angles) or pos,
+        angles = angles,
+        fov = fov,
+        drawviewer = false,
+    }
+end
+
+--- Rides on the minigun in first person, and looks from behind the strider in third person as any LVS walker.
 function ENT:CalcViewDriver(ply, pos, angles, fov, pod)
     if ( !pod:GetThirdPersonMode() ) then
-        local eyes = self:GetStriderAttachment("vehicle_driver_eyes")
-
-        return {
-            origin = eyes and eyes.Pos or pos,
-            angles = ply:EyeAngles(),
-            fov = fov,
-            drawviewer = false,
-        }
+        return self:CalcViewFirstPerson(ply, pos, fov)
     end
 
     return BaseClass.CalcViewDriver(self, ply, pos, angles, fov, pod)

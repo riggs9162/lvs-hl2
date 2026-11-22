@@ -42,6 +42,12 @@ ENT.HL2DropshipCargo = {
     angles = Angle(0, 0, 0),
 }
 
+--- Point in the head, relative to the entity, the minigun turns about: where the MiniGunBase attachment sits however high the strider stands.
+ENT.MinigunPivot = Vector(72, 0, -48)
+
+--- Offset of the first person view from the minigun's pivot, forward and up along the aim, so that the barrel shows below the crosshair.
+ENT.MinigunViewOffset = Vector(20, 0, 14)
+
 --- Weapon slot of the minigun.
 ENT.WEAPON_MINIGUN = 1
 
@@ -197,4 +203,26 @@ function ENT:GetStriderAttachment(name)
     attachment.Pos = attachment.Pos + self:GetUp() * self:GetSkeletonOffset(self:GetHeight())
 
     return attachment
+end
+
+--- Returns where the first person view sits on the minigun for an aim: just above and in front of its pivot, looking down the barrel.
+---@param pivot Vector Point the minigun turns about.
+---@param aimAngles Angle
+---@return Vector viewPos
+function ENT:GetMinigunViewPos(pivot, aimAngles)
+    return LocalToWorld(self.MinigunViewOffset, angle_zero, pivot, aimAngles)
+end
+
+--- Traces along the aim from the first person view on the minigun, so that the pilot aims from where they look and the crosshair stays in the middle of the screen.
+---@param bTraceForward boolean|nil Whether to trace straight ahead of the strider instead of along the aim.
+---@return table trace
+function ENT:GetEyeTrace(bTraceForward)
+    local aimVector = bTraceForward and self:GetForward() or self:GetAimVector()
+    local startPos = self:GetMinigunViewPos(self:LocalToWorld(self.MinigunPivot), aimVector:Angle())
+
+    return util.TraceLine({
+        start = startPos,
+        endpos = startPos + aimVector * 50000,
+        filter = self:GetCrosshairFilterEnts(),
+    })
 end
