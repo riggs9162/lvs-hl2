@@ -7,6 +7,7 @@ include("sv_minigun.lua")
 include("sv_cannon.lua")
 include("sv_stomp.lua")
 include("sv_damage.lua")
+include("sv_nav.lua")
 include("sv_ai.lua")
 
 --- Seconds between two thinks of the original NPC, at which it aims, fires and changes height.

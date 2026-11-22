@@ -1,4 +1,4 @@
---- Autopilot of the strider. The original walks along paths and to spots with a line of fire laid out by the map; without them the autopilot walks towards its enemy until it is in range, faces it while its minigun fires, blasts enemy vehicles with the cannon, skewers enemies that come too close, and wanders while it has no enemy.
+--- Autopilot of the strider. The original walks along paths and to spots with a line of fire laid out by the map; without them the autopilot finds its way over the navigation mesh to its enemy until it is in range and in sight, faces it while its minigun fires, blasts enemy vehicles with the cannon, skewers enemies that come too close, and wanders while it has no enemy.
 
 --- Distances to its enemy the autopilot keeps between: it walks closer from beyond the far one and backs off within the near one.
 local AI_ENGAGE_NEAR = 900
@@ -10,18 +10,20 @@ local AI_CANNON_RANGE = 4096
 --- Seconds between two alert calls, from CNPC_Strider::AlertSound.
 local AI_ALERT_INTERVAL = 2
 
---- Distance ahead of the body the autopilot looks for walls in while it wanders.
-local AI_WALL_PROBE = 600
+--- Shortest and longest seconds the autopilot heads for one spot while it wanders, and the distance at which it counts the spot as reached.
+local AI_WANDER_TIME_MIN = 8
+local AI_WANDER_TIME_MAX = 20
+local AI_WANDER_REACHED = 250
 
---- Shortest and longest seconds the autopilot keeps its heading while it wanders.
-local AI_WANDER_TIME_MIN = 4
-local AI_WANDER_TIME_MAX = 10
+--- Distance the autopilot backs off by when its enemy comes too close.
+local AI_BACK_OFF_DISTANCE = 600
 
 --- Prepares the autopilot state.
 function ENT:InitAI()
     self.aiNextAlert = 0
     self.aiNextWanderTurn = 0
-    self.aiWanderYaw = nil
+    self.aiWanderSpot = nil
+    self:ClearNavRoute()
 end
 
 --- Returns the enemy the autopilot's minigun is after, or nil.
@@ -47,45 +49,49 @@ function ENT:AlertAI(target)
     self:EmitSound("NPC_Strider.Alert")
 end
 
---- Wanders without an enemy: walks along, turning now and then or when the body is about to walk into a wall, as the original walks its paths.
+--- Wanders without an enemy, as the original walks its paths: heads for a spot in the open picked from the navigation mesh, or straight on without one, and walks around the walls in the way.
 function ENT:RunAIWander()
     local now = CurTime()
     local pos = self:GetPos()
-    local wall = util.TraceLine({
-        start = pos,
-        endpos = pos + self:GetForward() * AI_WALL_PROBE,
-        mask = MASK_SOLID_BRUSHONLY,
-    })
+    local spot = self.aiWanderSpot
 
-    if ( !self.aiWanderYaw or now > self.aiNextWanderTurn or wall.Hit ) then
-        self.aiWanderYaw = self:GetAngles().y + math.Rand(90, 270) * (wall.Hit and 1 or math.Rand(-0.5, 0.5))
+    if ( !spot or now > self.aiNextWanderTurn or spot:Distance2D(pos) < AI_WANDER_REACHED ) then
+        spot = self:FindWanderSpot() or pos + Angle(0, self:GetAngles().y + math.Rand(-90, 90), 0):Forward() * 2000
+        self.aiWanderSpot = spot
         self.aiNextWanderTurn = now + math.Rand(AI_WANDER_TIME_MIN, AI_WANDER_TIME_MAX)
+        self:ClearNavRoute()
     end
 
-    self:SetSteerTo(self.aiWanderYaw)
-    self:SetMove(1, 0, false)
+    if ( !self:NavigateTo(spot, nil, false) ) then
+        self.aiWanderSpot = nil
+    end
+
     self:SetAIAimVector(self:GetForward())
 end
 
---- Fights an enemy: runs closer while it is out of range as the original chases, walks back while it is too close, keeps it in front, lets the minigun fire at it, uses the cannon on vehicles and skewers it when it comes within reach.
+--- Fights an enemy: runs closer along the navigation mesh while it is out of range or out of sight as the original chases, walks back while it is too close, keeps it in front, lets the minigun fire at it, uses the cannon on vehicles and skewers it when it comes within reach.
 ---@param target Entity
 function ENT:RunAIAttack(target)
     local pos = self:GetPos()
     local toTarget = target:GetPos() - pos
     local distance = toTarget:Length2D()
-    local move = 0
+    local targetYaw = toTarget:Angle().y
+    local bCanSee = self:AICanSee(target)
 
-    if ( distance > AI_ENGAGE_FAR ) then
-        move = 1
+    if ( distance > AI_ENGAGE_FAR or !bCanSee ) then
+        self:NavigateTo(target:GetPos(), bCanSee and targetYaw or nil, distance > AI_ENGAGE_FAR)
     elseif ( distance < AI_ENGAGE_NEAR ) then
-        move = -1
+        self:ClearNavRoute()
+        self:WalkTowards(pos - toTarget:GetNormalized() * AI_BACK_OFF_DISTANCE, targetYaw, false)
+    else
+        self:ClearNavRoute()
+        self:SetSteerTo(targetYaw)
+        self:SetMove(0, 0)
     end
 
-    self:SetSteerTo(toTarget:Angle().y)
-    self:SetMove(move, 0, move > 0)
     self:SetAIAimVector((target:WorldSpaceCenter() - pos):GetNormalized())
 
-    if ( target.LVS and distance < AI_CANNON_RANGE and self:CanFireCannon() and self:AICanSee(target) ) then
+    if ( target.LVS and distance < AI_CANNON_RANGE and bCanSee and self:CanFireCannon() ) then
         self:StartCannonCharge(target)
 
         return
