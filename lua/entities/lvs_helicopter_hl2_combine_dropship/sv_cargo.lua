@@ -12,7 +12,7 @@ local SETTLE_SHARE = 0.05
 --- Seconds after the release during which the cargo still passes through the dropship.
 local NOCOLLIDE_RELEASE_TIME = 1
 
---- How each kind of cargo hangs under the dropship, from CNPC_CombineDropship::Spawn. Any entity may also offer itself as cargo with an HL2DropshipCargo table of the same form.
+--- How each kind of cargo hangs under the dropship, from CNPC_CombineDropship::Spawn. Any entity may also offer itself as cargo with an HL2DropshipCargo table of the same form. A parented NPC with a deploy sequence plays it backwards while it is picked up and forwards once it is set down, and stays frozen until it has finished.
 local CARGO_TYPES = {
     lvs_hl2_dropship_container = {
         offset = Vector(0, 0, 0),
@@ -23,6 +23,7 @@ local CARGO_TYPES = {
         angles = Angle(0, 0, 0),
         bParent = true,
         sequence = "carried",
+        deploySequence = "deploy",
     },
     lvs_wheeldrive_hl2_combine_apc = {
         offset = Vector(0, 0, -25),
@@ -35,6 +36,87 @@ local CARGO_TYPES = {
         bStopOnRelease = true,
     },
 }
+
+--- Returns how far an NPC is through playing its deploy sequence, from 0 to 1.
+---@param ent Entity
+---@param sequence number
+---@param startTime number
+---@return number progress
+local function GetDeployProgress(ent, sequence, startTime)
+    return math.Clamp((CurTime() - startTime) / ent:SequenceDuration(sequence), 0, 1)
+end
+
+--- Shows an NPC at a point of its deploy sequence, held still so that the clients show the same frame.
+---@param ent Entity
+---@param sequence number
+---@param cycle number
+local function SetDeployCycle(ent, sequence, cycle)
+    if ( ent:GetSequence() != sequence ) then
+        ent:ResetSequence(sequence)
+    end
+
+    ent:SetPlaybackRate(0)
+    ent:SetCycle(cycle)
+end
+
+--- Returns when a deploy sequence played in a direction would have started to be where the NPC is in it now, so that folding up and unfolding carry on from each other.
+---@param ent Entity
+---@param sequence number
+---@param bForward boolean
+---@return number startTime
+local function GetDeployStartTime(ent, sequence, bForward)
+    if ( ent:GetSequence() != sequence ) then return CurTime() end
+
+    local cycle = ent:GetCycle()
+    local progress = bForward and cycle or 1 - cycle
+
+    return CurTime() - progress * ent:SequenceDuration(sequence)
+end
+
+--- Freezes a carried NPC and stops its thinking, so that its own animations do not fight the ones the dropship plays on it.
+---@param ent Entity
+local function HoldCargoNPC(ent)
+    if ( !ent:IsNPC() ) then return end
+
+    ent:SetCondition(COND_NPC_FREEZE)
+    ent:AddEFlags(EFL_NO_THINK_FUNCTION)
+end
+
+--- Lets a released NPC think and move again.
+---@param ent Entity
+local function ResumeCargoNPC(ent)
+    ent:SetPlaybackRate(1)
+
+    if ( !ent:IsNPC() ) then return end
+
+    ent:RemoveEFlags(EFL_NO_THINK_FUNCTION)
+    ent:SetCondition(COND_NPC_UNFREEZE)
+    ent:NextThink(CurTime())
+end
+
+--- Unfolds a released NPC by playing its deploy sequence, and lets it move again once it stands.
+---@param ent Entity
+---@param sequence number
+local function DeployReleasedNPC(ent, sequence)
+    local startTime = GetDeployStartTime(ent, sequence, true)
+    local timerName = "lvs_hl2_dropship_deploy_" .. ent:EntIndex()
+
+    timer.Create(timerName, 0, 0, function()
+        if ( !IsValid(ent) or IsValid(ent.hl2DropshipCarrier) ) then
+            timer.Remove(timerName)
+
+            return
+        end
+
+        local progress = GetDeployProgress(ent, sequence, startTime)
+        SetDeployCycle(ent, sequence, progress)
+
+        if ( progress < 1 ) then return end
+
+        timer.Remove(timerName)
+        ResumeCargoNPC(ent)
+    end)
+end
 
 --- Returns how an entity hangs under the dropship, or nil when it cannot be carried.
 ---@param ent Entity
@@ -132,14 +214,16 @@ function ENT:GrabCargo(ent, bDefault)
         ent:SetParent(self)
         ent:SetLocalAngles(localAngles)
         ent:SetMoveType(MOVETYPE_NONE)
+        HoldCargoNPC(ent)
 
-        if ( ent:IsNPC() ) then
-            ent:SetCondition(COND_NPC_FREEZE)
-        end
-
+        local deploySequence = config.deploySequence and ent:LookupSequence(config.deploySequence) or -1
         local sequence = config.sequence and ent:LookupSequence(config.sequence) or -1
 
-        if ( sequence >= 0 ) then
+        if ( deploySequence >= 0 and !bDefault ) then
+            data.deploySequence = deploySequence
+            data.foldStart = GetDeployStartTime(ent, deploySequence, false)
+            SetDeployCycle(ent, deploySequence, 1 - GetDeployProgress(ent, deploySequence, data.foldStart))
+        elseif ( sequence >= 0 ) then
             ent:ResetSequence(sequence)
         end
     else
@@ -188,7 +272,7 @@ function ENT:GrabCargo(ent, bDefault)
     self:EmitSound("doors/door_metal_medium_open1.wav")
 end
 
---- Lets go of the cargo. A container keeps falling as it was moving, an APC that still works stops dead, and an NPC is set upright, from DropSoldierContainer, InputDropAPC and InputDropStrider.
+--- Lets go of the cargo. A container keeps falling as it was moving, an APC that still works stops dead, and an NPC is set upright and unfolds before it moves again, from DropSoldierContainer, InputDropAPC and InputDropStrider.
 function ENT:ReleaseCargo()
     local data = self.cargo
     if ( !data ) then return end
@@ -225,8 +309,12 @@ function ENT:ReleaseCargo()
         ent:SetAngles(angles)
         ent:SetMoveType(data.moveType)
 
-        if ( ent:IsNPC() ) then
-            ent:SetCondition(COND_NPC_UNFREEZE)
+        local deploySequence = data.config.deploySequence and ent:LookupSequence(data.config.deploySequence) or -1
+
+        if ( deploySequence >= 0 and ent:Health() > 0 ) then
+            DeployReleasedNPC(ent, deploySequence)
+        else
+            ResumeCargoNPC(ent)
         end
 
         return
@@ -303,7 +391,7 @@ function ENT:ToggleCargo()
     self:GrabCargo(ent)
 end
 
---- Keeps the cargo state up to date on every think: forgets cargo that is gone, lets go of a dead NPC, draws a parented cargo slowly into its place, from CNPC_CombineDropship::Flight, and holds an NPC in its carried pose.
+--- Keeps the cargo state up to date on every think: forgets cargo that is gone, lets go of a dead NPC, draws a parented cargo slowly into its place, from CNPC_CombineDropship::Flight, folds up an NPC that was just picked up and then holds it in its carried pose.
 function ENT:CargoThink()
     local data = self.cargo
     if ( !data ) then return end
@@ -327,6 +415,16 @@ function ENT:CargoThink()
     end
 
     ent:SetLocalPos(LerpVector(SETTLE_SHARE, ent:GetLocalPos(), data.config.offset))
+
+    if ( data.foldStart ) then
+        local progress = GetDeployProgress(ent, data.deploySequence, data.foldStart)
+        SetDeployCycle(ent, data.deploySequence, 1 - progress)
+
+        if ( progress < 1 ) then return end
+
+        data.foldStart = nil
+        ent:SetPlaybackRate(1)
+    end
 
     local sequence = data.config.sequence and ent:LookupSequence(data.config.sequence) or -1
 
