@@ -1,3 +1,12 @@
+local headlightOuterL = Vector(36.4, 77.5, 29.5)
+local headlightInnerL = Vector(29, 77.5, 29.5)
+local headlightOuterR = Vector(-34.5, 77.5, 29)
+local headlightInnerR = Vector(-27.1, 77.5, 29)
+local headlightBeamL = Vector(32.7, 79.5, 29.0)
+local headlightBeamR = Vector(-30.75, 79.5, 28.9)
+local taillightL = Vector(15.9, -139.2, 53)
+local taillightR = Vector(-17.44, -139.2, 53)
+
 ENT.Base = "lvs_base_wheeldrive"
 ENT.PrintName = "Jalopy"
 ENT.Author = "Riggs"
@@ -82,25 +91,25 @@ ENT.Lights = {
         Trigger = "high",
         Sprites = {
             {
-                pos = Vector(-34.5, 77.5, 29),
+                pos = headlightOuterR,
                 colorB = 200,
                 colorA = 150,
                 size = 60
             },
             {
-                pos = Vector(36.4, 77.5, 29.5),
+                pos = headlightOuterL,
                 colorB = 200,
                 colorA = 150,
                 size = 60
             },
             {
-                pos = Vector(-27.1, 77.5, 29),
+                pos = headlightInnerR,
                 colorB = 200,
                 colorA = 150,
                 size = 60
             },
             {
-                pos = Vector(29, 77.5, 29.5),
+                pos = headlightInnerL,
                 colorB = 200,
                 colorA = 150,
                 size = 60
@@ -108,7 +117,7 @@ ENT.Lights = {
         },
         ProjectedTextures = {
             {
-                pos = Vector(32.7, 79.5, 29.0),
+                pos = headlightBeamL,
                 ang = Angle(0, 90, 0),
                 colorB = 200,
                 colorA = 150,
@@ -116,7 +125,7 @@ ENT.Lights = {
                 farz = 2000
             },
             {
-                pos = Vector(-30.75, 79.5, 28.9),
+                pos = headlightBeamR,
                 ang = Angle(0, 90, 0),
                 colorB = 200,
                 colorA = 150,
@@ -129,29 +138,29 @@ ENT.Lights = {
         Trigger = "main",
         Sprites = {
             {
-                pos = Vector(-34.5, 77.5, 29),
+                pos = headlightOuterR,
                 colorB = 200,
                 colorA = 150
             },
             {
-                pos = Vector(36.4, 77.5, 29.5),
+                pos = headlightOuterL,
                 colorB = 200,
                 colorA = 150
             },
             {
-                pos = Vector(-27.1, 77.5, 29),
+                pos = headlightInnerR,
                 colorB = 200,
                 colorA = 150
             },
             {
-                pos = Vector(29, 77.5, 29.5),
+                pos = headlightInnerL,
                 colorB = 200,
                 colorA = 150
             },
         },
         ProjectedTextures = {
             {
-                pos = Vector(32.7, 79.5, 29.0),
+                pos = headlightBeamL,
                 ang = Angle(15, 90, 0),
                 colorB = 200,
                 colorA = 150,
@@ -159,7 +168,7 @@ ENT.Lights = {
                 farz = 1000
             },
             {
-                pos = Vector(-30.75, 79.5, 28.9),
+                pos = headlightBeamR,
                 ang = Angle(15, 90, 0),
                 colorB = 200,
                 colorA = 150,
@@ -172,7 +181,7 @@ ENT.Lights = {
         Trigger = "main+brake",
         ProjectedTextures = {
             {
-                pos = Vector(15.9, -139.2, 53),
+                pos = taillightL,
                 ang = Angle(40, -90, 0),
                 colorG = 0,
                 colorB = 0,
@@ -181,7 +190,7 @@ ENT.Lights = {
                 farz = 100
             },
             {
-                pos = Vector(-17.44, -139.2, 53),
+                pos = taillightR,
                 ang = Angle(40, -90, 0),
                 colorG = 0,
                 colorB = 0,
@@ -196,7 +205,7 @@ ENT.Lights = {
         Trigger = "reverse",
         ProjectedTextures = {
             {
-                pos = Vector(15.9, -139.2, 53),
+                pos = taillightL,
                 ang = Angle(40, -90, 0),
                 colorG = 0,
                 colorB = 0,
@@ -205,7 +214,7 @@ ENT.Lights = {
                 farz = 100
             },
             {
-                pos = Vector(-17.44, -139.2, 53),
+                pos = taillightR,
                 ang = Angle(40, -90, 0),
                 colorG = 0,
                 colorB = 0,

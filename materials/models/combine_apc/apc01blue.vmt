@@ -7,4 +7,9 @@
 	"$envmapsaturation" .5
 	"$envmaptint" "[ .375 .45 .5]"
 	"$basealphaenvmapmask" 1
+	// The glow lights up with the headlights: LVS raises $detailblendfactor while they are on.
+	"$detail" "models/combine_apc/apc01glow"
+	"$detailscale" 1
+	"$detailblendmode" 5
+	"$detailblendfactor" 0
 }

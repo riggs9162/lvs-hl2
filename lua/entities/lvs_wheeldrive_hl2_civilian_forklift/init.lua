@@ -13,7 +13,6 @@ local DRIVE = {
     rearTorque = 0,
     steerAngle = 45,
     bRearSteer = true,
-    drop = 10,
     height = 10,
     travel = 6,
 }

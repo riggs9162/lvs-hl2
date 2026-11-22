@@ -23,5 +23,5 @@ function ENT:OnSpawn(PObj)
     self:AddEngine(Vector(56.2, 0, 60.7))
     self:AddFuelTank(Vector(-60, 45, 30), Angle(0, 0, 0), 1000, LVS.FUELTYPE_PETROL)
 
-    lvsHL2.AddRiggedWheels(self, 19.2, 22.5, DRIVE)
+    lvsHL2.AddRiggedWheels(self, 20.9, 20.9, DRIVE)
 end

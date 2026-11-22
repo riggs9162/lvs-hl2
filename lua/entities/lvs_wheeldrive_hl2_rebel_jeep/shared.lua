@@ -1,3 +1,9 @@
+local headlightL = Vector(57, 11, 38.8)
+local headlightR = Vector(57, -11, 38.8)
+local headlightBeamL = Vector(55, 11, 35)
+local headlightBeamR = Vector(55, -11, 35)
+local taillight = Vector(-101, 14.9, 39.1)
+
 ENT.Base = "lvs_base_wheeldrive"
 ENT.PrintName = "Jeep"
 ENT.Author = "Riggs"
@@ -78,19 +84,19 @@ ENT.Lights = {
         Trigger = "high",
         Sprites = {
             {
-                pos = Vector(57, 11, 38.8),
+                pos = headlightL,
                 colorB = 200,
                 colorA = 150
             },
             {
-                pos = Vector(57, -11, 38.8),
+                pos = headlightR,
                 colorB = 200,
                 colorA = 150
             },
         },
         ProjectedTextures = {
             {
-                pos = Vector(55, 11, 35),
+                pos = headlightBeamL,
                 ang = Angle(0, 0, 0),
                 colorB = 200,
                 colorA = 150,
@@ -98,7 +104,7 @@ ENT.Lights = {
                 farz = 2000
             },
             {
-                pos = Vector(55, -11, 35),
+                pos = headlightBeamR,
                 ang = Angle(0, 0, 0),
                 colorB = 200,
                 colorA = 150,
@@ -111,19 +117,19 @@ ENT.Lights = {
         Trigger = "main",
         Sprites = {
             {
-                pos = Vector(57, 11, 38.8),
+                pos = headlightL,
                 colorB = 200,
                 colorA = 150
             },
             {
-                pos = Vector(57, -11, 38.8),
+                pos = headlightR,
                 colorB = 200,
                 colorA = 150
             },
         },
         ProjectedTextures = {
             {
-                pos = Vector(55, 11, 35),
+                pos = headlightBeamL,
                 ang = Angle(10, 0, 0),
                 colorB = 200,
                 colorA = 150,
@@ -131,7 +137,7 @@ ENT.Lights = {
                 farz = 1000
             },
             {
-                pos = Vector(55, -11, 35),
+                pos = headlightBeamR,
                 ang = Angle(10, 0, 0),
                 colorB = 200,
                 colorA = 150,
@@ -144,7 +150,7 @@ ENT.Lights = {
         Trigger = "main+brake",
         Sprites = {
             {
-                pos = Vector(-101, 14.9, 39.1),
+                pos = taillight,
                 colorB = 200,
                 colorA = 150
             },
@@ -154,7 +160,7 @@ ENT.Lights = {
         Trigger = "reverse",
         Sprites = {
             {
-                pos = Vector(-101, 14.9, 39.1),
+                pos = taillight,
                 colorB = 200,
                 colorA = 150
             },

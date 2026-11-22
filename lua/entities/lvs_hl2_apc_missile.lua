@@ -448,7 +448,7 @@ function ENT:ShouldHit(entity)
     if ( entity == self:GetOwner() or entity:GetParent() == self:GetOwner() ) then return false end
     if ( entity.lvsProjectile ) then return false end
 
-    return entity:IsSolid() or entity:IsSolidFlagSet(FSOLID_VOLUME_CONTENTS)
+    return entity:IsSolid() or bit.band(entity:GetSolidFlags(), FSOLID_VOLUME_CONTENTS) ~= 0
 end
 
 --- Checks the path the rocket flew since the last think for anything it ran into.

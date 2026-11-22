@@ -13,6 +13,7 @@ local DRIVE = {
     frontTorque = 0,
     rearTorque = 1,
     steerAngle = 35,
+    drop = 14,
 }
 
 --- Adds the seats, engine, fuel tank and rigged wheels once the vehicle has spawned.
@@ -23,5 +24,5 @@ function ENT:OnSpawn(PObj)
     self:AddEngine(Vector(111.5, 0, 63.4))
     self:AddFuelTank(Vector(-5, 45, 40), Angle(0, 0, 0), 1200, LVS.FUELTYPE_DIESEL)
 
-    lvsHL2.AddRiggedWheels(self, 24.1, 24.4, DRIVE)
+    lvsHL2.AddRiggedWheels(self, 24, 24, DRIVE)
 end

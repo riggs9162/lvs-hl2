@@ -290,7 +290,7 @@ end
 ---@param rearRadius number Radius of the rear tyres.
 ---@param drive table Axle setup, see lvsHL2.DefineAxles; drop sets how far below the compressed rig pose the wheels hang, 7 by default.
 function lvsHL2.AddRiggedWheels(vehicle, frontRadius, rearRadius, drive)
-    local drop = drive.drop or 7
+    local drop = drive.drop or 12
     local body = ents.Create("prop_dynamic")
     body:SetModel(vehicle:GetModel())
     body:SetPos(vehicle:GetPos())

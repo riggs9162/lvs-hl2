@@ -1,3 +1,6 @@
+local spotlight = Vector(0, 102, 60.5)
+local spotlightSmall = Vector(3, 99.5, 56.5)
+
 ENT.Base = "lvs_wheeldrive_hl2_combine_apc"
 ENT.PrintName = "Combine Transporter"
 ENT.Category = "[LVS] - Half Life 2"
@@ -18,7 +21,7 @@ ENT.Lights = {
         Trigger = "high",
         Sprites = {
             {
-                pos = Vector(0, 102, 60.5),
+                pos = spotlight,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
@@ -26,7 +29,7 @@ ENT.Lights = {
                 size = 60
             },
             {
-                pos = Vector(3, 99.5, 56.5),
+                pos = spotlightSmall,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
@@ -36,7 +39,7 @@ ENT.Lights = {
         },
         ProjectedTextures = {
             {
-                pos = Vector(0, 102, 60.5),
+                pos = spotlight,
                 ang = Angle(0, 90, 0),
                 colorR = 0,
                 colorG = 180,
@@ -53,7 +56,7 @@ ENT.Lights = {
         Trigger = "main",
         Sprites = {
             {
-                pos = Vector(0, 102, 60.5),
+                pos = spotlight,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
@@ -61,7 +64,7 @@ ENT.Lights = {
                 size = 60
             },
             {
-                pos = Vector(3, 99.5, 56.5),
+                pos = spotlightSmall,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
@@ -71,7 +74,7 @@ ENT.Lights = {
         },
         ProjectedTextures = {
             {
-                pos = Vector(0, 102, 60.5),
+                pos = spotlight,
                 ang = Angle(10, 90, 0),
                 colorR = 0,
                 colorG = 180,

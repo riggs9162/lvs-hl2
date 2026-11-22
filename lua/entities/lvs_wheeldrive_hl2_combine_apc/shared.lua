@@ -1,3 +1,9 @@
+--- The headlight shines from the rocket muzzle on the front of the hull. The sprite and the high beam
+--- follow its attachment straight ahead. LVS ignores the angle of a light placed on an attachment, so the
+--- low beam sits at the muzzle by position instead, tilted ten degrees down.
+local spotlight = "cannon_muzzle"
+local spotlightLow = Vector(52.1, 0, 75.7)
+
 ENT.Base = "lvs_base_wheeldrive"
 ENT.PrintName = "Combine APC"
 ENT.Author = "Riggs"
@@ -47,26 +53,17 @@ ENT.Lights = {
         Trigger = "high",
         Sprites = {
             {
-                pos = Vector(102, 0, 60),
+                pos = spotlight,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
                 colorA = 150,
                 size = 60
             },
-            {
-                pos = Vector(100, -3, 56),
-                colorR = 0,
-                colorG = 180,
-                colorB = 220,
-                colorA = 150,
-                size = 20
-            }
         },
         ProjectedTextures = {
             {
-                pos = Vector(102, 0, 60),
-                ang = Angle(0, 0, 0),
+                pos = spotlight,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
@@ -80,27 +77,22 @@ ENT.Lights = {
     },
     {
         Trigger = "main",
+        -- Lights up the glow mask (apc01glow) on the hull while the lights are on.
+        SubMaterialID = "models/combine_apc/apc01blue",
+        SubMaterialBrightness = 1,
         Sprites = {
             {
-                pos = Vector(102, 0, 60),
+                pos = spotlight,
                 colorR = 0,
                 colorG = 180,
                 colorB = 220,
                 colorA = 150,
                 size = 60
             },
-            {
-                pos = Vector(100, -3, 56),
-                colorR = 0,
-                colorG = 180,
-                colorB = 220,
-                colorA = 150,
-                size = 20
-            }
         },
         ProjectedTextures = {
             {
-                pos = Vector(102, 0, 60.5),
+                pos = spotlightLow,
                 ang = Angle(10, 0, 0),
                 colorR = 0,
                 colorG = 180,

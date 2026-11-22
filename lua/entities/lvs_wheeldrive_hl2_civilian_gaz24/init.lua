@@ -15,6 +15,7 @@ local DRIVE = {
     frontTorque = 0,
     rearTorque = 1,
     steerAngle = 30,
+    stiffness = 0.7, -- softer springs: about 21560 / 2940 instead of 61600 / 8400, close to the rebel jeep
 }
 
 --- Adds the seats, engine, fuel tank and rigged wheels once the vehicle has spawned.
