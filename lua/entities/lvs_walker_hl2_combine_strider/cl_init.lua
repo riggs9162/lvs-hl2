@@ -1,7 +1,5 @@
 include("shared.lua")
 
-DEFINE_BASECLASS("lvs_base_fakehover")
-
 --- Degrees per second the minigun turns sideways and up or down, and its turning limits.
 local MINIGUN_YAW_RATE = 360
 local MINIGUN_PITCH_RATE = 180
@@ -27,6 +25,20 @@ local MOVE_YAW_MIN_SPEED = 20
 --- Box around the entity's origin the model is drawn within: the legs reach far below the body, and the model's origin lies high above it while crouched.
 local RENDER_MINS = Vector(-600, -600, -600)
 local RENDER_MAXS = Vector(600, 600, 400)
+
+--- Point above the body, relative to the entity, the third person camera orbits.
+local THIRDPERSON_PIVOT = Vector(0, 0, 60)
+
+--- Distance of the third person camera from its pivot before the pilot zooms, and how far it rises above the aim as a share of that distance.
+local THIRDPERSON_RADIUS = 325
+local THIRDPERSON_LIFT = 0.15
+
+--- Share of its distance the third person camera moves back out by per second once a wall no longer blocks it.
+local THIRDPERSON_EASE_OUT = 1.5
+
+--- Box the third person camera keeps clear of walls with.
+local THIRDPERSON_HULL_MINS = Vector(-4, -4, -4)
+local THIRDPERSON_HULL_MAXS = Vector(4, 4, 4)
 
 function ENT:OnSpawn()
     self:SetIK(true)
@@ -185,6 +197,15 @@ function ENT:OnFrame()
     self:AnimateStrider()
 end
 
+--- Returns whether the third person camera may pass through an entity: it stops only at the world and solid map entities, as the LVS camera does.
+---@param ent Entity
+---@return boolean bCollide
+local function ThirdPersonCameraFilter(ent)
+    local class = ent:GetClass()
+
+    return !class:StartWith("prop_physics") and !class:StartWith("prop_dynamic") and !class:StartWith("prop_ragdoll") and !ent:IsVehicle() and !class:StartWith("gmod_") and !class:StartWith("lvs_") and !class:StartWith("player") and !ent.LVS
+end
+
 --- Rides on the minigun in first person, looking down its barrel from just above it.
 ---@param ply Player
 ---@param pos Vector
@@ -202,13 +223,53 @@ function ENT:CalcViewFirstPerson(ply, pos, fov)
     }
 end
 
---- Rides on the minigun in first person, and looks from behind the strider in third person as any LVS walker.
+--- Orbits a point above the strider's body in third person, high enough to see over it and close enough to keep it large on screen. A wall pulls the camera in at once and lets it ease back out, so that it does not jump back and forth while the strider walks past buildings.
+---@param ply Player
+---@param fov number
+---@param pod Entity
+---@return table view
+function ENT:CalcViewThirdPerson(ply, fov, pod)
+    local angles = ply:EyeAngles()
+    local pivot = self:LocalToWorld(THIRDPERSON_PIVOT)
+    local radius = THIRDPERSON_RADIUS * (1 + pod:GetCameraDistance())
+    local targetPos = pivot - angles:Forward() * radius + angles:Up() * radius * (THIRDPERSON_LIFT + pod:GetCameraHeight())
+
+    local trace = util.TraceHull({
+        start = pivot,
+        endpos = targetPos,
+        filter = ThirdPersonCameraFilter,
+        mins = THIRDPERSON_HULL_MINS,
+        maxs = THIRDPERSON_HULL_MAXS,
+    })
+
+    local fraction = trace.StartSolid and 1 or trace.Fraction
+    local eased = self.thirdPersonFraction or fraction
+
+    if ( fraction < eased ) then
+        eased = fraction
+    else
+        eased = math.Approach(eased, fraction, THIRDPERSON_EASE_OUT * RealFrameTime())
+    end
+
+    self.thirdPersonFraction = eased
+
+    return {
+        origin = LerpVector(eased, pivot, targetPos),
+        angles = angles,
+        fov = fov,
+        drawviewer = true,
+    }
+end
+
+--- Rides on the minigun in first person and orbits the strider in third person.
 function ENT:CalcViewDriver(ply, pos, angles, fov, pod)
     if ( !pod:GetThirdPersonMode() ) then
+        self.thirdPersonFraction = nil
+
         return self:CalcViewFirstPerson(ply, pos, fov)
     end
 
-    return BaseClass.CalcViewDriver(self, ply, pos, angles, fov, pod)
+    return self:CalcViewThirdPerson(ply, fov, pod)
 end
 
 --- Draws a square crosshair with a shadow.
