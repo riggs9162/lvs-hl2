@@ -9,6 +9,8 @@ CreateConVar("lvs_car_hl2_combineapc_spread", 0.06976, nil, "Controls the spread
 
 CreateConVar("lvs_car_hl2_combinetransport_health", 1800, nil, "Controls the health of the Combine Transport.")
 
+CreateConVar("lvs_car_hl2_combinebrickade_health", 2500, nil, "Controls the health of the Combine Brickade.")
+
 --- Reports once the map has loaded whether the LVS base is installed, since none of the vehicles work without it.
 local function CheckLVSInstalled()
     if ( !LVS ) then
