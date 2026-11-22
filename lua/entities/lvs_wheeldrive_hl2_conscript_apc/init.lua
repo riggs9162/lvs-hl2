@@ -1,6 +1,7 @@
 AddCSLuaFile("shared.lua")
 AddCSLuaFile("cl_init.lua")
 include("shared.lua")
+include("lvs_hl2/sv_wheeldrive_ai.lua")
 function ENT:OnSpawn(PObj)
     local Pod = self:AddDriverSeat(Vector(75, 20, -5), Angle(0, 270, 0))
     Pod.ExitPos = Vector(75, -60, 0)

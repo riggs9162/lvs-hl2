@@ -2,6 +2,7 @@ AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("lvs_hl2/sh_civilian.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
+include("lvs_hl2/sv_wheeldrive_ai.lua")
 
 local SEATS = {
     {pos = Vector(-13.4, 17.7, 15.4)},

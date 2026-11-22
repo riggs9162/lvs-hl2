@@ -2,6 +2,7 @@ AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("cl_sounds.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
+include("lvs_hl2/sv_wheeldrive_ai.lua")
 include("sv_damage.lua")
 include("lvs_hl2/sv_dropship_cargo.lua")
 

@@ -2,6 +2,7 @@
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
+include("lvs_hl2/sv_wheeldrive_ai.lua")
 
 function ENT:OnSpawn(PObj)
     self:SetAngles(self:GetAngles() - Angle(0, 90, 0))
