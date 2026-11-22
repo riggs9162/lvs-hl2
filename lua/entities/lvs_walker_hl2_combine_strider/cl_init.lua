@@ -163,10 +163,16 @@ function ENT:AnimateStrider()
     end
 
     self:PlaceModel()
+    self:ApplyAnimPoses(anim)
     self:AnimMinigun(anim, deltatime)
     self:AnimCannon(anim, deltatime)
     self:AnimMoveYaw(anim, deltatime)
+    self:ApplyAnimPoses(anim)
+end
 
+--- Sets the pose parameters the client animates and rebuilds the bones from them. The server networks its own values of the same pose parameters, which overwrite the client's between frames, so the client puts its own back before it reads an attachment to aim from.
+---@param anim table Client animation state.
+function ENT:ApplyAnimPoses(anim)
     self:SetPoseParameter("minigunYaw", anim.minigunYaw)
     self:SetPoseParameter("minigunPitch", anim.minigunPitch)
     self:SetPoseParameter("yaw", anim.cannonYaw)
