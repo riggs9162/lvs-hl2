@@ -1,100 +1,56 @@
 include("shared.lua")
 include("cl_sounds.lua")
 
+--- How fast the rear doors swing, as the share of their full travel per second.
+local REAR_DOORS_SPEED = 1.6
+
+--- Where the lamp of the troop bay hangs, under the middle of its ceiling.
+local TROOP_BAY_LIGHT = Vector(-70, 0, 84)
+
 function ENT:UpdatePoseParameters(steer, speed_kmh, engine_rpm, throttle, brake, handbrake, clutch, gear, temperature, fuel, oil, ammeter)
     self:SetPoseParameter("vehicle_steer", steer)
     self:UpdateHL2EngineSound(throttle)
 end
 
-function ENT:OnSpawn(PObj)
-    self.interiorParts = {}
+--- Swings the rear doors towards open while troops climb in or out, and shut again after.
+function ENT:UpdateRearDoors()
+    if ( !self.GetRearDoorsOpenUntil ) then return end
 
-    local interiorPos = Vector(-130, 0, 70)
-    local interiorModels = {"models/riggs9162/vehicles/combine_apc_interior_0.mdl", "models/riggs9162/vehicles/combine_apc_interior_1.mdl", "models/riggs9162/vehicles/combine_apc_interior_2.mdl", "models/riggs9162/vehicles/combine_apc_interior_3.mdl", "models/riggs9162/vehicles/combine_apc_interior_4.mdl", "models/riggs9162/vehicles/combine_apc_interior_5.mdl", "models/riggs9162/vehicles/combine_apc_interior_6.mdl", "models/riggs9162/vehicles/combine_apc_interior_7.mdl", "models/riggs9162/vehicles/combine_apc_interior_8.mdl"}
-    for k, v in ipairs(interiorModels) do
-        local interior = ClientsideModel(v, RENDERGROUP_OPAQUE)
-        interior:SetPos(self:LocalToWorld(interiorPos))
-        interior:SetAngles(self:GetAngles() + Angle(0, 270, 0))
-        interior:SetParent(self)
-        interior:Spawn()
-        interior:Activate()
+    local now = RealTime()
+    local delta = now - (self.RearDoorsUpdated or now)
+    self.RearDoorsUpdated = now
 
-        interior:SetNoDraw(true)
+    local target = self:GetRearDoorsOpenUntil() > CurTime() and 1 or 0
+    self.RearDoors = math.Approach(self.RearDoors or 0, target, delta * REAR_DOORS_SPEED)
 
-        self.interiorParts[k] = interior
-    end
-
-    self.LightProp = ClientsideModel("models/props_combine/combine_light001a.mdl")
-    self.LightProp:SetPos(self:LocalToWorld(Vector(95, 0, 34)))
-    self.LightProp:SetAngles(self:GetAngles() + Angle(0, 180, 0))
-    self.LightProp:SetParent(self)
-    self.LightProp:Spawn()
-    self.LightProp:Activate()
-
-    self.LightProp:SetModelScale(0.75)
-    self.LightProp:SetNoDraw(true)
+    self:SetPoseParameter("vehicle_rear_doors", self.RearDoors)
 end
 
-function ENT:DrawInterior()
+--- Whether the local player rides in the troop bay and looks out of their own eyes.
+---@return boolean
+function ENT:IsViewedFromTroopBay()
     local client = LocalPlayer()
     local vehicle = client:GetVehicle()
-    local lvsVehicle = client:lvsGetVehicle()
-    if ( !IsValid(vehicle) or !IsValid(lvsVehicle) ) then
-        self:DrawModel()
-        return
-    end
+    if ( !IsValid(vehicle) or client:lvsGetVehicle() != self or self:GetDriver() == client ) then return false end
 
-    if ( lvsVehicle != self or lvsVehicle:GetDriver() == client ) then
-        self:DrawModel()
-        return
-    end
-
-    local bThirdperson = vehicle:GetThirdPersonMode()
-    if ( bThirdperson ) then
-        self:DrawModel()
-    else
-        for k, v in ipairs(self.interiorParts) do
-            if ( !IsValid(v) ) then
-                for k2, v2 in ipairs(self.interiorParts) do
-                    if ( IsValid(v2) ) then
-                        v2:Remove()
-                    end
-                end
-
-                self.interiorParts = {}
-                return
-            end
-
-            v:DrawModel()
-        end
-
-        if ( system.HasFocus() ) then
-            local dynamicLighting = DynamicLight(self:EntIndex(), true)
-            if ( dynamicLighting ) then
-                local pos = self:LocalToWorld(Vector(0, -35, 85))
-                dynamicLighting.pos = pos
-                dynamicLighting.r = 140
-                dynamicLighting.g = 200
-                dynamicLighting.b = 50
-                dynamicLighting.brightness = 10
-                dynamicLighting.size = 64
-                dynamicLighting.decay = 1000
-                dynamicLighting.dietime = CurTime() + 1
-            end
-        end
-    end
+    return !vehicle:GetThirdPersonMode()
 end
 
-function ENT:DrawLightProp()
-    if ( !IsValid(self.LightProp) ) then return end
+--- Lights the troop bay for the troops riding in it.
+function ENT:DrawTroopBayLight()
+    if ( !system.HasFocus() or !self:IsViewedFromTroopBay() ) then return end
 
-    if ( self.MDL_DESTROYED and self:GetModel() == self.MDL_DESTROYED ) then
-        self.LightProp:Remove()
-        self.LightProp = nil
-        return
-    end
+    local light = DynamicLight(self:EntIndex(), true)
+    if ( !light ) then return end
 
-    self.LightProp:DrawModel()
+    light.pos = self:LocalToWorld(TROOP_BAY_LIGHT)
+    light.r = 140
+    light.g = 200
+    light.b = 50
+    light.brightness = 2
+    light.size = 128
+    light.decay = 1000
+    light.dietime = CurTime() + 1
 end
 
 function ENT:Draw()
@@ -112,19 +68,11 @@ function ENT:Draw()
         end
     end
 
-    self:DrawInterior()
-    self:DrawLightProp()
+    self:UpdateRearDoors()
+    self:DrawModel()
+    self:DrawTroopBayLight()
 end
 
 function ENT:OnRemoved()
     self:StopHL2EngineSound()
-
-    if ( self.LightProp ) then
-        self.LightProp:Remove()
-        self.LightProp = nil
-    end
-
-    for k, v in ipairs(self.interiorParts) do
-        v:Remove()
-    end
 end

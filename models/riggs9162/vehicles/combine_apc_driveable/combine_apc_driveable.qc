@@ -2,7 +2,7 @@ $modelname "combine_apc_driveable.mdl"
 
 $bodygroup "Body"
 {
-	studio "apc_new_cabin_6h.smd"
+	studio "combine_apc_driveable_body.smd"
 }
 $bodygroup "Holo Hull"
 {
@@ -20,17 +20,20 @@ $bodygroup "Holo Jump"
 	studio "apc_holo_jump.smd"
 }
 
-$origin 0 0 0 0
+$origin 0 0 0 -90
 
 $surfaceprop "metal"
 
 $contents "solid"
 
-$illumposition -5.311 0 68.376
+$illumposition 0 5.311 68.376
 
 $mostlyopaque
 
 $cdmaterials "models\combine_apc\"
+$cdmaterials "models\props_combine\"
+$cdmaterials "models\riggs9162\apc_interior\metal\"
+$cdmaterials "models\riggs9162\apc_interior\props\"
 
 $texturegroup "skinfamilies"
 {
@@ -60,10 +63,17 @@ $attachment "cabin_sprite_right" "APC.Frame" 7 28.7 27.2 rotate 70 50 -45
 $attachment "cabin_sprite_left" "APC.Frame" 8.5 28.7 27.8 rotate 70 50 -45
 $attachment "holo_jump" "holo_jump" 0 0 0 rotate 0 0 0
 $attachment "gun_indicator" "APC.Gun_Base" -2.4 4 2 rotate 0 180 90
+$attachment "seat_driver" "APC.Frame" -0.048 4.281 -23.262 rotate -90 0 -90
+$attachment "seat_passenger1" "APC.Frame" -23.056 -10.759 -43.222 rotate 0 0 -90
+$attachment "seat_passenger2" "APC.Frame" -23.089 -10.759 -62.222 rotate 0 0 -90
+$attachment "seat_passenger3" "APC.Frame" -23.122 -10.759 -81.222 rotate 0 0 -90
+$attachment "seat_passenger4" "APC.Frame" 22.944 -10.679 -43.301 rotate 0 -180 90
+$attachment "seat_passenger5" "APC.Frame" 22.911 -10.679 -62.301 rotate 0 -180 90
+$attachment "seat_passenger6" "APC.Frame" 22.878 -10.679 -81.301 rotate 0 -180 90
 
 $cbox 0 0 0 0 0 0
 
-$bbox -74.037 -127.941 0 74.037 117.319 136.751
+$bbox -127.941 -74.037 0 117.319 74.037 136.751
 
 $hboxset "default"
 $hbox 0 "APC" -40 -42.5 21.5 120 42.5 106.5
@@ -74,7 +84,7 @@ $hbox 1 "APC" -80 -120 0 80 -8 96
 $hbox 2 "APC" -80 8 0 80 120 96
 $skipboneinbbox
 
-$definebone "APC.Frame" "" 0 6.7425 60.718807 0 0 89.999982 0 0 0 0 0 0
+$definebone "APC.Frame" "" 6.7425 0 60.718807 0 -89.999982 89.999982 0 0 0 0 0 0
 $definebone "APC.Wheel_RL_Shock" "APC.Frame" 47.470718 -32.811935 -69.652519 0 0 0 0 0 0 0 0 0
 $definebone "APC.Wheel_RL_Rotate" "APC.Wheel_RL_Shock" 5.529282 -0.000002 0.000008 0 0 0 0 0 0 0 0 0
 $definebone "APC.Wheel_FL_Shock" "APC.Frame" 46.15773 -32.811943 73.94265 0 0 0 0 0 0 0 0 0
@@ -97,7 +107,9 @@ $definebone "speedometer_l" "APC.Frame" 2.612381 35.155533 5.074935 -21.347435 8
 $definebone "handbrake" "APC.Frame" -7.31783 17.303291 21.674274 67.43551 -138.968204 128.786741 0 0 0 0 0 0
 $definebone "headlight_tumbler" "APC.Frame" 4.500354 14.368538 22.202911 71.2787 -89.999982 -179.999964 0 0 0 0 0 0
 $definebone "holo_jump" "APC.Frame" -1.962268 37.898026 6.026344 -0.000458 -179.999978 89.999982 0 0 0 0 0 0
-$definebone "APC" "" 0 0 0 0 -89.999982 0 0 0 0 0 0 0
+$definebone "APC" "" 0 0 0 0 179.999963 0 0 0 0 0 0 0
+$definebone "APC.Door_RearL" "APC.Frame" 24.910030 -14.988779 -96.127502 146.012109 7.154858 -82.182161 0 0 0 0 0 0
+$definebone "APC.Door_RearR" "APC.Frame" -24.909969 -14.988779 -96.127518 33.987855 -7.154855 -97.817837 0 0 0 0 0 0
 
 
 $poseparameter "vehicle_weapon_yaw" -180 180 loop 0
@@ -117,6 +129,7 @@ $poseparameter "vehicle_guage" 0 1 loop 0
 $poseparameter "vehicle_headlight_tumbler" 0 1 loop 0
 $poseparameter "vehicle_handbrake" 0 1 loop 0
 $poseparameter "vehicle_holo_jump" 0 1 loop 0
+$poseparameter "vehicle_rear_doors" 0 1 loop 0
 
 $weightlist "weights_weapon_pitch" {
 	 "APC.Frame" 0
@@ -143,6 +156,8 @@ $weightlist "weights_weapon_pitch" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_turning" {
@@ -170,6 +185,8 @@ $weightlist "weights_turning" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_fr_suspension" {
@@ -197,6 +214,8 @@ $weightlist "weights_wheel_fr_suspension" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_fr_spin" {
@@ -224,6 +243,8 @@ $weightlist "weights_wheel_fr_spin" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_fl_suspension" {
@@ -251,6 +272,8 @@ $weightlist "weights_wheel_fl_suspension" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_fl_spin" {
@@ -278,6 +301,8 @@ $weightlist "weights_wheel_fl_spin" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_rr_suspension" {
@@ -305,6 +330,8 @@ $weightlist "weights_wheel_rr_suspension" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_rr_spin" {
@@ -332,6 +359,8 @@ $weightlist "weights_wheel_rr_spin" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_rl_suspension" {
@@ -359,6 +388,8 @@ $weightlist "weights_wheel_rl_suspension" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_wheel_rl_spin" {
@@ -386,6 +417,8 @@ $weightlist "weights_wheel_rl_spin" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_door_pos" {
@@ -413,6 +446,37 @@ $weightlist "weights_door_pos" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
+}
+
+$weightlist "weights_rear_doors" {
+	 "APC.Frame" 0
+	 "APC.Wheel_RL_Shock" 0
+	 "APC.Wheel_RL_Rotate" 0
+	 "APC.Wheel_FL_Shock" 0
+	 "APC.Wheel_FL_Turn" 0
+	 "APC.Wheel_FL_Rotate" 0
+	 "APC.Wheel_FR_Shock" 0
+	 "APC.Wheel_FR_Turn" 0
+	 "APC.Wheel_FR_Rotate" 0
+	 "APC.Wheel_RR_Shock" 0
+	 "APC.Wheel_RR_Rotate" 0
+	 "APC.piston" 0
+	 "APC.Gun_Base" 0
+	 "APC_frame_to_steer" 0
+	 "apc_steering_wheel" 0
+	 "APC_frame_to_door" 0
+	 "apc_driver_door" 0
+	 "apc_driver_eyes" 0
+	 "speedometer_r" 0
+	 "speedometer_l" 0
+	 "handbrake" 0
+	 "headlight_tumbler" 0
+	 "holo_jump" 0
+	 "APC" 0
+	 "APC.Door_RearL" 1
+	 "APC.Door_RearR" 1
 }
 
 $weightlist "weights_speedometer" {
@@ -440,6 +504,8 @@ $weightlist "weights_speedometer" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_headlight_tumbler" {
@@ -467,6 +533,8 @@ $weightlist "weights_headlight_tumbler" {
 	 "headlight_tumbler" 1
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_handbrake" {
@@ -494,6 +562,8 @@ $weightlist "weights_handbrake" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 0
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $weightlist "weights_holo_jump" {
@@ -521,6 +591,8 @@ $weightlist "weights_holo_jump" {
 	 "headlight_tumbler" 0
 	 "holo_jump" 1
 	 "APC" 0
+	 "APC.Door_RearL" 0
+	 "APC.Door_RearR" 0
 }
 
 $animation "zero_speed_corrective_animation" "combine_apc_driveable_anims\zero_speed_corrective_animation.smd" {
@@ -859,6 +931,16 @@ $animation "wheel_rl_spin240" "combine_apc_driveable_anims\wheel_rl_spin240.smd"
 	weightlist "weights_wheel_rl_spin"
 }
 
+$animation "rear_doors_closed_pose" "combine_apc_driveable_anims\rear_doors_closed.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+}
+
+$animation "rear_doors_open_pose" "combine_apc_driveable_anims\rear_doors_open.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+}
+
 $animation "door_open" "combine_apc_driveable_anims\door_open.smd" {
 	fps 30
 	weightlist "weights_door_pos"
@@ -1192,7 +1274,48 @@ $sequence "holo_jump" {
 	fadeout 0.2
 }
 
-$collisionmodel "combine_apc_driveable_physics.smd"
+$sequence "rear_doors" {
+	"rear_doors_closed_pose"
+	"rear_doors_open_pose"
+	autoplay
+	blend "vehicle_rear_doors" 0 1
+	blendwidth 2
+	fadein 0.2
+	fadeout 0.2
+	hidden
+}
+
+$sequence "rear_doors_open" "combine_apc_driveable_anims\rear_doors_opening.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+	fadein 0.2
+	fadeout 0.2
+}
+
+$sequence "rear_doors_close" "combine_apc_driveable_anims\rear_doors_closing.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+	fadein 0.2
+	fadeout 0.2
+}
+
+$sequence "rear_doors_open_idle" "combine_apc_driveable_anims\rear_doors_open.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+	loop
+	fadein 0.2
+	fadeout 0.2
+}
+
+$sequence "rear_doors_close_idle" "combine_apc_driveable_anims\rear_doors_closed.smd" {
+	fps 30
+	weightlist "weights_rear_doors"
+	loop
+	fadein 0.2
+	fadeout 0.2
+}
+
+$collisionmodel "combine_apc_driveable_physics_hull.smd"
 {
 	$mass 1500
 	$inertia 1
@@ -1200,7 +1323,7 @@ $collisionmodel "combine_apc_driveable_physics.smd"
 	$rotdamping 0
 	$rootbone " "
 	$concave
-	$maxconvexpieces 6
+	$maxconvexpieces 40
 
 }
 

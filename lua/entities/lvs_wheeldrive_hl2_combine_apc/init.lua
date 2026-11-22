@@ -62,24 +62,94 @@ function ENT:AddHL2Wheels(frontRadius, rearRadius)
     })
 end
 
+--- The seats, as the model's attachments that mark them. Each attachment faces where its occupant looks.
+--- The positions are fallbacks for a model without the attachments.
+local DRIVER_SEAT = {attachment = "seat_driver", pos = Vector(-30, 0, 65), facing = 0}
+local PASSENGER_SEATS = {
+    {attachment = "seat_passenger1", pos = Vector(-50, -23, 50), facing = 90},
+    {attachment = "seat_passenger2", pos = Vector(-69, -23, 50), facing = 90},
+    {attachment = "seat_passenger3", pos = Vector(-88, -23, 50), facing = 90},
+    {attachment = "seat_passenger4", pos = Vector(-50, 23, 50), facing = -90},
+    {attachment = "seat_passenger5", pos = Vector(-69, 23, 50), facing = -90},
+    {attachment = "seat_passenger6", pos = Vector(-88, 23, 50), facing = -90},
+}
+
+--- Returns where a seat goes and how its pod is turned, in the vehicle's own space.
+--- A pod's occupant looks along its +Y, a quarter turn left of the attachment's forward.
+---@param seat table An entry of DRIVER_SEAT or PASSENGER_SEATS.
+---@return Vector pos
+---@return Angle ang
+function ENT:GetSeatPlacement(seat)
+    local id = self:LookupAttachment(seat.attachment)
+    local data = id and id > 0 and self:GetAttachment(id)
+
+    if ( data ) then
+        local pos = self:WorldToLocal(data.Pos)
+        local ang = self:WorldToLocalAngles(data.Ang)
+
+        return pos, Angle(0, ang.y - 90, 0)
+    end
+
+    return seat.pos, Angle(0, seat.facing - 90, 0)
+end
+
+--- Where troops step out, behind the rear doors.
+local REAR_EXIT_X = -160
+local REAR_EXIT_Z = 40
+
+--- Seconds the rear doors stay open after a troop gets in or out.
+local REAR_DOORS_OPEN_TIME = 2.5
+
+--- Opens the rear doors for a moment.
+function ENT:OpenRearDoors()
+    if ( !self.SetRearDoorsOpenUntil ) then return end
+
+    local wasClosed = self:GetRearDoorsOpenUntil() < CurTime()
+
+    self:SetRearDoorsOpenUntil(CurTime() + REAR_DOORS_OPEN_TIME)
+
+    if ( wasClosed ) then
+        self:EmitSound("doors/doormove2.wav", 70, 110)
+    end
+end
+
+--- Returns the APC whose passenger seat the vehicle is, if any.
+---@param vehicle Vehicle
+---@return Entity|nil
+local function GetTroopAPC(vehicle)
+    if ( !IsValid(vehicle) ) then return end
+
+    local apc = vehicle:GetParent()
+    if ( !IsValid(apc) or !apc.OpenRearDoors or apc:GetModel() != apc.MDL ) then return end
+    if ( IsValid(apc.GetDriverSeat and apc:GetDriverSeat()) and apc:GetDriverSeat() == vehicle ) then return end
+
+    return apc
+end
+
+hook.Add("PlayerEnteredVehicle", "lvs_hl2_combine_apc_rear_doors", function(client, vehicle)
+    local apc = GetTroopAPC(vehicle)
+    if ( apc ) then apc:OpenRearDoors() end
+end)
+
+hook.Add("PlayerLeaveVehicle", "lvs_hl2_combine_apc_rear_doors", function(client, vehicle)
+    local apc = GetTroopAPC(vehicle)
+    if ( apc ) then apc:OpenRearDoors() end
+end)
+
 function ENT:OnSpawn(PObj)
-    local DriverSeat = self:AddDriverSeat(Vector(-30, 0, 65), Angle(0, 270, 0))
+    -- Read the seat attachments in the pose the APC idles in, as the frame bone turns in its animations.
+    -- The server works out attachment positions from the current sequence when asked.
+    self:ResetSequence(self:LookupSequence("idle"))
+    self:SetCycle(0)
+
+    local DriverSeat = self:AddDriverSeat(self:GetSeatPlacement(DRIVER_SEAT))
     DriverSeat.ExitPos = Vector(-44.58, 13.57, 69.06)
 
-    -- add 6 seats
-    local PassengerSeat
-
-    for i = 1, 6 do
-        local pos, ang = Vector(-52, -30, 50), Angle(0, 0, 0)
-        pos.x = pos.x - (i - 1) * 24
-        if ( i > 3 ) then
-            pos.y = pos.y + 60
-            pos.x = pos.x + 72
-            ang.y = ang.y + 180
-        end
-
-        PassengerSeat = self:AddPassengerSeat(pos, ang)
-        PassengerSeat.ExitPos = Vector(0, -170, 64)
+    -- Six troops on the two benches of the troop bay, facing each other across the aisle.
+    for _, seat in ipairs(PASSENGER_SEATS) do
+        local pos, ang = self:GetSeatPlacement(seat)
+        local PassengerSeat = self:AddPassengerSeat(pos, ang)
+        PassengerSeat.ExitPos = Vector(REAR_EXIT_X, pos.y * 0.6, REAR_EXIT_Z)
     end
 
     self:AddEngine(Vector(80, 0, 50))

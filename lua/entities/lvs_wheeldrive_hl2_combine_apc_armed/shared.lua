@@ -81,6 +81,9 @@ end
 
 function ENT:OnSetupDataTables()
     self:AddDT("Bool", "HornEnabled")
+
+    -- Time until which the rear doors stay open, so troops can climb in and out.
+    self:AddDT("Float", "RearDoorsOpenUntil")
 end
 
 --- Registers the machine gun, which fires bursts of ten rounds with a pause after each, as long as the trigger is held.

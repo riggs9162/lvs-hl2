@@ -117,6 +117,9 @@ ENT.Lights = {
 
 function ENT:OnSetupDataTables()
     self:AddDT("Bool", "HornEnabled")
+
+    -- Time until which the rear doors stay open, so troops can climb in and out.
+    self:AddDT("Float", "RearDoorsOpenUntil")
 end
 
 function ENT:InitWeapons()

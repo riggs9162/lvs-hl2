@@ -7,9 +7,7 @@ list.Set("ContentCategoryIcons", "[LVS] - Half Life 2 - Resistance", "icon16/lvs
 
 --- Vehicles whose passengers sit inside a closed hull and should not show through it.
 local ENCLOSED_VEHICLES = {
-    ["lvs_wheeldrive_hl2_combine_apc"] = true,
-    ["lvs_wheeldrive_hl2_combine_apc_armed"] = true,
-    ["lvs_wheeldrive_hl2_combine_transport"] = true,
+    ["lvs_wheeldrive_hl2_combine_transport"] = true
 }
 
 --- Hides passengers of enclosed Combine vehicles from players on foot and from anyone in a third-person seat, while the driver and players seated in first person still see them.
