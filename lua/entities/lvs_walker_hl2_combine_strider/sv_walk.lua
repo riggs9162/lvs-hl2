@@ -6,6 +6,9 @@ local WALK_SEQUENCE = "walk_all"
 local RUN_SEQUENCE = "fastwalk_all"
 local CARRIED_SEQUENCE = "carried"
 
+--- Animation of unfolding the legs after a dropship sets the strider down, ACT_STRIDER_DEPLOY. Played backwards it folds them up when a dropship picks the strider up.
+local DEPLOY_SEQUENCE = "deploy"
+
 --- Gestures of stepping around on the spot, ACT_GESTURE_TURN_LEFT and ACT_GESTURE_TURN_RIGHT.
 local TURN_LEFT_SEQUENCE = "turnleft"
 local TURN_RIGHT_SEQUENCE = "turnright"
@@ -224,10 +227,74 @@ function ENT:HitGround()
     return self.bOnGround == true
 end
 
---- Returns whether the strider has to stand still, while it fires its cannon or skewers, as the original stops moving for both.
+--- Returns whether the strider has to stand still, while it fires its cannon or skewers, as the original stops moving for both, and while it unfolds its legs after a dropship set it down.
 ---@return boolean bHold
 function ENT:IsHoldingStill()
-    return self:GetCannonCharging() or self:IsStomping()
+    return self:GetCannonCharging() or self:IsStomping() or self:IsDeploying()
+end
+
+--- Returns whether the strider is still unfolding its legs after a dropship set it down.
+---@return boolean bDeploying
+function ENT:IsDeploying()
+    return self.carryAnimState == "unfold"
+end
+
+--- Starts folding the legs up or unfolding them, carrying on from where the other left off when the dropship changes its mind halfway.
+---@param state string "fold" or "unfold".
+function ENT:StartCarryAnim(state)
+    local sequence = self:LookupSequence(DEPLOY_SEQUENCE)
+    local duration = self:SequenceDuration(sequence)
+    local progress = 0
+
+    if ( self:GetSequence() == sequence ) then
+        local cycle = self:GetCycle()
+
+        progress = state == "fold" and 1 - cycle or cycle
+    end
+
+    self.carryAnimState = state
+    self.carryAnimStart = CurTime() - progress * duration
+end
+
+--- Plays the animations of being carried: the deploy animation backwards while a dropship picks the strider up, the carried one while it hangs, and the deploy animation once it is set down. The cycle is set on every tick, so that the clients play it backwards as well.
+---@return boolean bPlaying Whether the animations of being carried hold the strider.
+function ENT:UpdateCarryAnim()
+    local bCarried = self:GetCarryingDropship() != nil
+
+    if ( bCarried != self.bWasCarried ) then
+        if ( self.bWasCarried == nil and bCarried ) then
+            self.carryAnimState = "carried"
+        elseif ( self.bWasCarried != nil ) then
+            self:StartCarryAnim(bCarried and "fold" or "unfold")
+        end
+
+        self.bWasCarried = bCarried
+    end
+
+    local state = self.carryAnimState
+    if ( !state ) then return false end
+
+    if ( state == "carried" ) then
+        self:PlayStriderSequence(CARRIED_SEQUENCE)
+
+        return true
+    end
+
+    local sequence = self:LookupSequence(DEPLOY_SEQUENCE)
+    local progress = math.Clamp((CurTime() - self.carryAnimStart) / self:SequenceDuration(sequence), 0, 1)
+
+    if ( self:GetSequence() != sequence ) then
+        self:ResetSequence(sequence)
+    end
+
+    self:SetPlaybackRate(0)
+    self:SetCycle(state == "fold" and 1 - progress or progress)
+
+    if ( progress >= 1 ) then
+        self.carryAnimState = state == "fold" and "carried" or nil
+    end
+
+    return true
 end
 
 --- Plays an animation from its start unless it is playing already, at its normal pace.
@@ -269,7 +336,7 @@ function ENT:FadeTurnGesture(deltatime)
     self:SetLayerWeight(layer, weight)
 end
 
---- Picks the animation and the velocity: the walk, or the run while boosting, in the direction of the input and exactly as fast as the animation carries the strider, as the original moves at the ground speed of its walk; the idle while it stands, and the legs folded while a dropship carries it.
+--- Picks the animation and the velocity: the walk, or the run while boosting, in the direction of the input and exactly as fast as the animation carries the strider, as the original moves at the ground speed of its walk; the idle while it stands, and the animations of being carried while a dropship picks it up, carries it and sets it down.
 ---@param deltatime number
 function ENT:UpdateWalk(deltatime)
     self.walkVelocity = Vector(0, 0, 0)
@@ -281,8 +348,8 @@ function ENT:UpdateWalk(deltatime)
         return
     end
 
-    if ( self:GetCarryingDropship() ) then
-        self:PlayStriderSequence(CARRIED_SEQUENCE)
+    if ( self:UpdateCarryAnim() ) then
+        self:FadeTurnGesture(deltatime)
 
         return
     end
@@ -378,7 +445,8 @@ function ENT:SimulateWalk(phys, deltatime)
         linearAccel.z = (targetZ - pos.z) * HOVER_SPRING - velocity.z * HOVER_DAMPING + self:GetWorldGravity()
     end
 
-    local yawDifference = math.AngleDifference(self:GetSteerTo(), angles.y)
+    local steerYaw = self:IsDeploying() and angles.y or self:GetSteerTo()
+    local yawDifference = math.AngleDifference(steerYaw, angles.y)
     local yawRate = math.Clamp(yawDifference * YAW_RESPONSE, -YAW_SPEED, YAW_SPEED)
     local angularAccel = Vector(
         -angles.r * LEVEL_SPRING - angVelocity.x * LEVEL_DAMPING,
